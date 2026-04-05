@@ -97,25 +97,28 @@ export default function Stewdium(){
 
   // Auth
   useEffect(()=>{
-    const loadProfileWithRetry=async(id)=>{
-      // Brand-new signups: handle_new_user trigger may race with first fetch,
-      // so retry a few times before giving up.
+    // CRITICAL: do not await Supabase calls inside onAuthStateChange — the
+    // callback runs while the auth lock is held, so any awaited db.* call
+    // deadlocks (infinite spinner, silent failures on save). Defer with
+    // setTimeout so the work runs AFTER the callback releases the lock.
+    const loadUserData=async(id)=>{
+      // Retry profile load: handle_new_user trigger races with first fetch.
+      let loaded=false;
       for(let i=0;i<5;i++){
         const{data,error}=await db.getProfile(id);
-        if(data){setProfile(data);return;}
-        if(error&&error.code!=='PGRST116')break; // non-missing-row error; stop
+        if(data){setProfile(data);loaded=true;break;}
+        if(error&&error.code!=='PGRST116')break;
         await new Promise(r=>setTimeout(r,300));
       }
-      // Fallback stub so the profile page is never blank
-      setProfile({id,name:'',bio:'',avatar_url:'',allergies:[],allergies_public:false});
+      if(!loaded){setProfile({id,name:'',bio:'',avatar_url:'',allergies:[],allergies_public:false});}
+      const{data:si}=await db.getSavedRecipeIds(id);setSavedIds(si);
+      const{data:li}=await db.getUserLikes(id);setLikedIds(li);
+      const{data:fi}=await db.getFollowingIds(id);setFollowingIds(fi);
     };
-    const{data:{subscription}}=db.onAuthChange(async(ev,sess)=>{
+    const{data:{subscription}}=db.onAuthChange((ev,sess)=>{
       if(sess?.user){
         setUser(sess.user);
-        await loadProfileWithRetry(sess.user.id);
-        const{data:si}=await db.getSavedRecipeIds(sess.user.id);setSavedIds(si);
-        const{data:li}=await db.getUserLikes(sess.user.id);setLikedIds(li);
-        const{data:fi}=await db.getFollowingIds(sess.user.id);setFollowingIds(fi);
+        setTimeout(()=>{loadUserData(sess.user.id);},0);
       }else{
         setUser(null);setProfile(null);setSavedIds([]);setLikedIds([]);setFollowingIds([]);
       }
