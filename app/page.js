@@ -143,12 +143,61 @@ export default function Stewdium(){
   const openRecipe=r=>{setViewing(r);setScaleValue(null);setScaleMode("servings");setCommentText("");setPage("recipe");};
   const handleAddRecipe=()=>{if(!user){setAuthModal("login");return;}setNewRecipe({title:"",description:"",category:"Dinner",prepTime:"",cookTime:"",servings:4,ingredients:[{amount:"",unit:"",name:""}],steps:[""],isPublic:true,imageFile:null,emoji:"🍽️",dietTags:[]});setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");};
 
-  const saveNewRecipe=async()=>{if(!newRecipe?.title||!user||saving)return;setSaving(true);let image_url="";if(newRecipe.imageFile){const ext=newRecipe.imageFile.name.split('.').pop();const path=`${user.id}/${Date.now()}.${ext}`;const{url}=await db.uploadImage('recipe-images',path,newRecipe.imageFile);if(url)image_url=url;}
-  const ings=newRecipe.ingredients.filter(i=>i.name).map(i=>({...i,amount:parseFrac(i.amount)}));const steps=newRecipe.steps.filter(s=>s.trim());
-  const nutrition=calculateNutrition(ings,parseInt(newRecipe.servings)||4);const detectedAllergens=detectAllergens(ings);
-  const autoTags=suggestDietTags(ings);const finalTags=[...new Set([...(newRecipe.dietTags||[]),...autoTags])];
-  await db.createRecipe({user_id:user.id,title:newRecipe.title,description:newRecipe.description,category:newRecipe.category,prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:detectedAllergens,nutrition,tags:finalTags});
-  setSaving(false);setNewRecipe(null);setPage("board");loadRecipes();};
+  const handleEditRecipe=r=>{
+    if(!user||user.id!==r.user_id)return;
+    setNewRecipe({
+      id:r.id,
+      title:r.title||"",
+      description:r.description||"",
+      category:r.category||"Dinner",
+      prepTime:r.prep_time||"",
+      cookTime:r.cook_time||"",
+      servings:r.servings||4,
+      ingredients:(r.ingredients||[]).length?r.ingredients.map(i=>({amount:String(i.amount??""),unit:i.unit||"",name:i.name||""})):[{amount:"",unit:"",name:""}],
+      steps:(r.steps||[]).length?r.steps:[""],
+      isPublic:r.is_public!==false,
+      imageFile:null,
+      existingImageUrl:r.image_url||"",
+      emoji:r.emoji||"🍽️",
+      dietTags:r.tags||[],
+    });
+    setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");
+  };
+
+  const handleDeleteRecipe=async r=>{
+    if(!user||user.id!==r.user_id)return;
+    if(!window.confirm(`Delete "${r.title}"? This cannot be undone.`))return;
+    const{error}=await db.deleteRecipe(r.id);
+    if(error){alert("Could not delete: "+error.message);return;}
+    setViewing(null);setPage("board");loadRecipes();
+    db.getUserRecipes(user.id).then(({data})=>setMyRecipes(data));
+  };
+
+  const saveNewRecipe=async()=>{
+    if(!newRecipe?.title||!user||saving)return;
+    setSaving(true);
+    let image_url=newRecipe.existingImageUrl||"";
+    if(newRecipe.imageFile){
+      const ext=newRecipe.imageFile.name.split('.').pop();
+      const path=`${user.id}/${Date.now()}.${ext}`;
+      const{url}=await db.uploadImage('recipe-images',path,newRecipe.imageFile);
+      if(url)image_url=url;
+    }
+    const ings=newRecipe.ingredients.filter(i=>i.name).map(i=>({...i,amount:parseFrac(i.amount)}));
+    const steps=newRecipe.steps.filter(s=>s.trim());
+    const nutrition=calculateNutrition(ings,parseInt(newRecipe.servings)||4);
+    const detectedAllergens=detectAllergens(ings);
+    const autoTags=suggestDietTags(ings);
+    const finalTags=[...new Set([...(newRecipe.dietTags||[]),...autoTags])];
+    const payload={title:newRecipe.title,description:newRecipe.description,category:newRecipe.category,prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:detectedAllergens,nutrition,tags:finalTags};
+    if(newRecipe.id){
+      await db.updateRecipe(newRecipe.id,payload);
+    }else{
+      await db.createRecipe({user_id:user.id,...payload});
+    }
+    setSaving(false);setNewRecipe(null);setPage("board");loadRecipes();
+    db.getUserRecipes(user.id).then(({data})=>setMyRecipes(data));
+  };
 
   const uploadCookedPhoto=async f=>{if(!user||!viewing)return;const ext=f.name.split('.').pop();const path=`${user.id}/${viewing.id}_${Date.now()}.${ext}`;const{url}=await db.uploadImage('cooked-photos',path,f);if(url){const{data}=await db.addCookedPhoto(user.id,viewing.id,url);if(data)setCookedPhotos(p=>[data,...p]);}};
   const submitComment=async()=>{if(!commentText.trim()||!user||!viewing)return;const{data}=await db.addComment(user.id,viewing.id,commentText.trim());if(data){setComments(p=>[...p,data]);setCommentText("");}};
@@ -206,7 +255,7 @@ export default function Stewdium(){
     <button className="back-btn" onClick={()=>setPage("home")}>← Back</button>
     <div className="recipe-hero">{r.image_url?<img src={r.image_url} alt={r.title}/>:r.emoji||"🍽️"}</div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}><div><div className="recipe-title">{r.title}</div><div className="recipe-card-author" style={{marginBottom:8,cursor:"pointer"}} onClick={()=>viewProfile(r.user_id)}>by {aName(r)}</div></div>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{user&&<><button className="btn btn-pink btn-sm" onClick={()=>cookedRef.current?.click()}>📸 I cooked this!</button><input ref={cookedRef} type="file" accept="image/*" onChange={e=>{if(e.target.files?.[0])uploadCookedPhoto(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></>}<button className={`like-btn ${likedIds.includes(r.id)?"liked":""}`} onClick={()=>toggleLike(r.id)}>👍 {r.like_count||0}</button><button className="btn btn-secondary btn-sm" onClick={()=>toggleSave(r.id)}>{savedIds.includes(r.id)?"❤️ Saved":"🤍 Save"}</button></div></div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{user&&<><button className="btn btn-pink btn-sm" onClick={()=>cookedRef.current?.click()}>📸 I cooked this!</button><input ref={cookedRef} type="file" accept="image/*" onChange={e=>{if(e.target.files?.[0])uploadCookedPhoto(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></>}<button className={`like-btn ${likedIds.includes(r.id)?"liked":""}`} onClick={()=>toggleLike(r.id)}>👍 {r.like_count||0}</button><button className="btn btn-secondary btn-sm" onClick={()=>toggleSave(r.id)}>{savedIds.includes(r.id)?"❤️ Saved":"🤍 Save"}</button>{user&&user.id===r.user_id&&<><button className="btn btn-secondary btn-sm" onClick={()=>handleEditRecipe(r)}>✏️ Edit</button><button className="btn btn-secondary btn-sm" style={{color:"#dc2626",borderColor:"#fecaca"}} onClick={()=>handleDeleteRecipe(r)}>🗑️ Delete</button></>}</div></div>
     {user&&hasAllergen(r)&&<div className="allergen-warn">⚠️ This recipe contains ingredients you're allergic to</div>}
     <AllergenBadges allergens={allergens} userAllergies={uAllergies}/>
     <div className="recipe-desc">{r.description}</div>
@@ -239,9 +288,9 @@ export default function Stewdium(){
 
   {/* ADD RECIPE */}
   {page==="addRecipe"&&newRecipe&&<div style={{maxWidth:640,margin:"0 auto"}}><button className="back-btn" onClick={()=>{setNewRecipe(null);setPage("board");}}>← Back</button>
-    <div className="page-title">Add a Recipe</div>
+    <div className="page-title">{newRecipe.id?"Edit Recipe":"Add a Recipe"}</div>
     <div className="card-static" style={{padding:28}}>
-      <div className="form-group"><label className="form-label">Recipe Photo</label><ImageUpload value={newRecipe.imageFile} onChange={f=>setNewRecipe({...newRecipe,imageFile:f})} height={220}/></div>
+      <div className="form-group"><label className="form-label">Recipe Photo</label><ImageUpload value={newRecipe.imageFile||newRecipe.existingImageUrl} onChange={f=>setNewRecipe({...newRecipe,imageFile:f})} height={220}/></div>
       <div className="form-group"><label className="form-label">Title *</label><input className="form-input" placeholder="e.g., Grandma's Apple Pie" value={newRecipe.title} onChange={e=>setNewRecipe({...newRecipe,title:e.target.value})}/></div>
       <div className="form-group"><label className="form-label">Description</label><textarea className="form-input form-textarea" value={newRecipe.description} onChange={e=>setNewRecipe({...newRecipe,description:e.target.value})}/></div>
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div className="form-group" style={{flex:1,minWidth:120}}><label className="form-label">Category</label><select className="form-input" value={newRecipe.category} onChange={e=>setNewRecipe({...newRecipe,category:e.target.value})}>{CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}</select></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Servings</label><input className="form-input" type="number" min="1" value={newRecipe.servings} onChange={e=>setNewRecipe({...newRecipe,servings:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Prep Time</label><input className="form-input" placeholder="15 min" value={newRecipe.prepTime} onChange={e=>setNewRecipe({...newRecipe,prepTime:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Cook Time</label><input className="form-input" placeholder="30 min" value={newRecipe.cookTime} onChange={e=>setNewRecipe({...newRecipe,cookTime:e.target.value})}/></div></div>
