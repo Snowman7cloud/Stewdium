@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base reset - component has its own comprehensive styles */
+html, body {
+  margin: 0;
+  padding: 0;
+}
