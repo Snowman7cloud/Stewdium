@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import * as db from '../lib/db';
-import { createClient } from '../lib/supabase';
 import { calculateNutrition, detectAllergens, ALLERGEN_LIST, DIET_TAGS } from '../lib/nutrition';
 import { parseIngredientBlock, parseStepsBlock } from '../lib/parse-ingredients';
 
@@ -97,7 +96,32 @@ export default function Stewdium(){
   const csvRef=useRef(null);const cookedRef=useRef(null);
 
   // Auth
-  useEffect(()=>{const{data:{subscription}}=db.onAuthChange(async(ev,sess)=>{if(sess?.user){setUser(sess.user);const{data:p}=await db.getProfile(sess.user.id);setProfile(p);const{data:si}=await db.getSavedRecipeIds(sess.user.id);setSavedIds(si);const{data:li}=await db.getUserLikes(sess.user.id);setLikedIds(li);const{data:fi}=await db.getFollowingIds(sess.user.id);setFollowingIds(fi);}else{setUser(null);setProfile(null);setSavedIds([]);setLikedIds([]);setFollowingIds([]);}});return()=>subscription.unsubscribe();},[]);
+  useEffect(()=>{
+    const loadProfileWithRetry=async(id)=>{
+      // Brand-new signups: handle_new_user trigger may race with first fetch,
+      // so retry a few times before giving up.
+      for(let i=0;i<5;i++){
+        const{data,error}=await db.getProfile(id);
+        if(data){setProfile(data);return;}
+        if(error&&error.code!=='PGRST116')break; // non-missing-row error; stop
+        await new Promise(r=>setTimeout(r,300));
+      }
+      // Fallback stub so the profile page is never blank
+      setProfile({id,name:'',bio:'',avatar_url:'',allergies:[],allergies_public:false});
+    };
+    const{data:{subscription}}=db.onAuthChange(async(ev,sess)=>{
+      if(sess?.user){
+        setUser(sess.user);
+        await loadProfileWithRetry(sess.user.id);
+        const{data:si}=await db.getSavedRecipeIds(sess.user.id);setSavedIds(si);
+        const{data:li}=await db.getUserLikes(sess.user.id);setLikedIds(li);
+        const{data:fi}=await db.getFollowingIds(sess.user.id);setFollowingIds(fi);
+      }else{
+        setUser(null);setProfile(null);setSavedIds([]);setLikedIds([]);setFollowingIds([]);
+      }
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
 
   const loadRecipes=useCallback(async()=>{setLoading(true);const{data}=await db.getRecipes({category:catFilter,search});if(sortBy==="popular")data.sort((a,b)=>(b.like_count||0)-(a.like_count||0));setRecipes(data);setLoading(false);},[catFilter,search,sortBy]);
   useEffect(()=>{loadRecipes();},[loadRecipes]);

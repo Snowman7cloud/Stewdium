@@ -1,20 +1,33 @@
-import { createServerComponentClient } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 
 // This page is server-rendered for SEO
 // Google sees full recipe content, JSON-LD structured data
 // No auth required to view public recipes
 
 async function getRecipe(id) {
+  // Basic UUID guard so random paths don't hit Postgres with a type error
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
   const cookieStore = cookies();
-  const supabase = createServerComponentClient({ cookies: () => cookieStore });
-  const { data, error } = await supabase
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get(name) { return cookieStore.get(name)?.value; },
+        set() {},
+        remove() {},
+      },
+    }
+  );
+  const { data } = await supabase
     .from('recipes')
-    .select('*, profiles!recipes_user_id_fkey(name, avatar_url)')
+    .select('*, profiles!recipes_profile_fkey(name, avatar_url)')
     .eq('id', id)
     .eq('is_public', true)
-    .single();
+    .maybeSingle();
   return data;
 }
 
