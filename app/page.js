@@ -31,11 +31,38 @@ function suggestDietTags(ingredients){
 }
 
 // ─── Components ───
-function ImageUpload({value,onChange,height=200,label="Upload a photo",round=false}){
-  const ref=useRef(null);const[drag,setDrag]=useState(false);
-  const hf=async f=>{if(!f||!f.type.startsWith("image/"))return;onChange(f);};
-  if(round)return(<div style={{display:"inline-block"}}><div onClick={()=>ref.current?.click()} style={{width:80,height:80,borderRadius:"50%",overflow:"hidden",background:value?"none":"linear-gradient(135deg,var(--pink-200),var(--sage-200))",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"3px dashed var(--sage-300)"}}>{value?<img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:24}}>📷</span>}</div><input ref={ref} type="file" accept="image/*" onChange={e=>e.target.files?.[0]&&hf(e.target.files[0])} style={{display:"none"}}/><div style={{fontSize:11,color:"var(--gray-400)",textAlign:"center",marginTop:4}}>{label}</div></div>);
-  return(<div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(e.dataTransfer?.files?.[0])hf(e.dataTransfer.files[0]);}} onClick={()=>ref.current?.click()} style={{height,borderRadius:"var(--radius)",overflow:"hidden",border:drag?"3px dashed var(--sage-400)":value?"none":"3px dashed var(--gray-300)",background:value?"none":"linear-gradient(135deg,var(--pink-50),var(--sage-50),var(--blue-50))",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>{value?(<><img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/><div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.6)",color:"#fff",padding:"4px 10px",borderRadius:99,fontSize:12,fontWeight:700}}>Change</div></>):(<><span style={{fontSize:36,marginBottom:8}}>📸</span><span style={{fontWeight:700,fontSize:14,color:"var(--gray-500)"}}>{label}</span><span style={{fontSize:12,color:"var(--gray-400)",marginTop:2}}>Drag & drop or click</span></>)}<input ref={ref} type="file" accept="image/*" onChange={e=>e.target.files?.[0]&&hf(e.target.files[0])} style={{display:"none"}}/></div>);
+function CropModal({file,aspect=1,onDone,onCancel}){
+  const canvasRef=useRef(null);const imgRef=useRef(null);const[pos,setPos]=useState({x:0,y:0});const[scale,setScale]=useState(1);const[dragging,setDragging]=useState(false);const dragStart=useRef({x:0,y:0,px:0,py:0});
+  const handleMouseDown=e=>{e.preventDefault();setDragging(true);dragStart.current={x:e.clientX,y:e.clientY,px:pos.x,py:pos.y};};
+  const handleMouseMove=e=>{if(!dragging)return;setPos({x:dragStart.current.px+(e.clientX-dragStart.current.x),y:dragStart.current.py+(e.clientY-dragStart.current.y)});};
+  const handleMouseUp=()=>setDragging(false);
+  const handleWheel=e=>{e.preventDefault();setScale(s=>Math.max(.3,Math.min(5,s-(e.deltaY*.001))));};
+  const handleTouchStart=e=>{if(e.touches.length===1){const t=e.touches[0];setDragging(true);dragStart.current={x:t.clientX,y:t.clientY,px:pos.x,py:pos.y};}};
+  const handleTouchMove=e=>{if(dragging&&e.touches.length===1){const t=e.touches[0];setPos({x:dragStart.current.px+(t.clientX-dragStart.current.x),y:dragStart.current.py+(t.clientY-dragStart.current.y)});}};
+  const crop=()=>{const img=imgRef.current;if(!img)return;const size=280;const c=canvasRef.current;c.width=size;c.height=size/aspect;const ctx=c.getContext("2d");const iw=img.naturalWidth,ih=img.naturalHeight;const displayW=size*scale*(iw>ih?1:iw/ih)*1.5;const displayH=size*scale*(ih>iw?1:ih/iw)*1.5;const sx=((size/2-pos.x-displayW/2)/displayW)*iw;const sy=(((size/aspect)/2-pos.y-displayH/2)/displayH)*ih;const sw=(size/displayW)*iw;const sh=((size/aspect)/displayH)*ih;ctx.drawImage(img,sx,sy,sw,sh,0,0,size,size/aspect);c.toBlob(blob=>{if(blob)onDone(new File([blob],"cropped.jpg",{type:"image/jpeg"}));},"image/jpeg",.92);};
+  const src=typeof file==="string"?file:URL.createObjectURL(file);
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onTouchEnd={()=>setDragging(false)}>
+    <div style={{color:"#fff",fontWeight:700,fontSize:14,marginBottom:12}}>Drag to reposition, scroll to zoom</div>
+    <div style={{width:280,height:280/aspect,borderRadius:aspect===1?'50%':12,overflow:"hidden",border:"3px solid #fff",position:"relative",cursor:dragging?"grabbing":"grab",touchAction:"none"}} onMouseDown={handleMouseDown} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
+      <img ref={imgRef} src={src} alt="" style={{position:"absolute",left:"50%",top:"50%",transform:`translate(calc(-50% + ${pos.x}px),calc(-50% + ${pos.y}px)) scale(${scale})`,maxWidth:"none",maxHeight:"none",width:"150%",pointerEvents:"none",userSelect:"none"}} draggable={false}/>
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginTop:12}}>
+      <span style={{color:"#fff",fontSize:12}}>Zoom</span>
+      <input type="range" min="30" max="500" value={Math.round(scale*100)} onChange={e=>setScale(parseInt(e.target.value)/100)} style={{width:140}}/>
+    </div>
+    <div style={{display:"flex",gap:12,marginTop:16}}>
+      <button className="btn btn-primary" onClick={crop}>Apply</button>
+      <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+    </div>
+    <canvas ref={canvasRef} style={{display:"none"}}/>
+  </div>);
+}
+function ImageUpload({value,onChange,height=200,label="Upload a photo",round=false,cropAspect}){
+  const ref=useRef(null);const[drag,setDrag]=useState(false);const[cropFile,setCropFile]=useState(null);
+  const hf=async f=>{if(!f||!f.type.startsWith("image/"))return;if(cropAspect!==undefined){setCropFile(f);}else{onChange(f);}};
+  const onCropDone=f=>{setCropFile(null);onChange(f);};
+  if(round)return(<div style={{display:"inline-block"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||1} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}<div onClick={()=>ref.current?.click()} style={{width:80,height:80,borderRadius:"50%",overflow:"hidden",background:value?"none":"linear-gradient(135deg,var(--pink-200),var(--sage-200))",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"3px dashed var(--sage-300)"}}>{value?<img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:24}}>📷</span>}</div><input ref={ref} type="file" accept="image/*" onChange={e=>e.target.files?.[0]&&hf(e.target.files[0])} style={{display:"none"}}/><div style={{fontSize:11,color:"var(--gray-400)",textAlign:"center",marginTop:4}}>{label}</div></div>);
+  return(<div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(e.dataTransfer?.files?.[0])hf(e.dataTransfer.files[0]);}} onClick={()=>ref.current?.click()} style={{height,borderRadius:"var(--radius)",overflow:"hidden",border:drag?"3px dashed var(--sage-400)":value?"none":"3px dashed var(--gray-300)",background:value?"none":"linear-gradient(135deg,var(--pink-50),var(--sage-50),var(--blue-50))",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||4/3} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}{value?(<><img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/><div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.6)",color:"#fff",padding:"4px 10px",borderRadius:99,fontSize:12,fontWeight:700}}>Change</div></>):(<><span style={{fontSize:36,marginBottom:8}}>📸</span><span style={{fontWeight:700,fontSize:14,color:"var(--gray-500)"}}>{label}</span><span style={{fontSize:12,color:"var(--gray-400)",marginTop:2}}>Drag & drop or click</span></>)}<input ref={ref} type="file" accept="image/*" onChange={e=>e.target.files?.[0]&&hf(e.target.files[0])} style={{display:"none"}}/></div>);
 }
 function Lightbox({src,onClose}){if(!src)return null;return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out",backdropFilter:"blur(8px)"}}><img src={src} alt="" style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:12}}/><button onClick={onClose} style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",width:40,height:40,borderRadius:"50%",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></div>);}
 function NutritionPanel({nutrition}){if(!nutrition)return null;const ps=nutrition.perServing;const items=[{label:"Calories",val:ps.calories,unit:"kcal",color:"var(--pink-400)"},{label:"Protein",val:ps.protein,unit:"g",color:"var(--sage-500)"},{label:"Carbs",val:ps.carbs,unit:"g",color:"var(--blue-400)"},{label:"Fat",val:ps.fat,unit:"g",color:"var(--pink-300)"}];return(<div style={{margin:"24px 0",padding:20,background:"var(--white)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-sm)"}}><div className="section-title" style={{borderColor:"var(--sage-200)"}}>🥗 Nutrition Per Serving</div><div style={{display:"flex",gap:16,flexWrap:"wrap"}}>{items.map(i=><div key={i.label} style={{flex:1,minWidth:80,textAlign:"center",padding:12,background:"var(--gray-50)",borderRadius:"var(--radius-sm)"}}><div style={{fontSize:22,fontWeight:800,color:i.color}}>{i.val}</div><div style={{fontSize:11,color:"var(--gray-400)",fontWeight:700,textTransform:"uppercase"}}>{i.unit}</div><div style={{fontSize:12,fontWeight:700,color:"var(--gray-600)",marginTop:2}}>{i.label}</div></div>)}</div>{nutrition.matched<nutrition.totalIngredients&&<div style={{fontSize:11,color:"var(--gray-400)",marginTop:8,textAlign:"center"}}>Based on {nutrition.coverage} matched ingredients</div>}</div>);}
@@ -90,7 +117,7 @@ export default function Stewdium(){
   const[ingPasteMode,setIngPasteMode]=useState(false);const[ingPasteText,setIngPasteText]=useState("");
   const[stepPasteMode,setStepPasteMode]=useState(false);const[stepPasteText,setStepPasteText]=useState("");
   const[csvMapping,setCsvMapping]=useState(null);
-  const[friendSearch,setFriendSearch]=useState("");const[friendResults,setFriendResults]=useState([]);const[followingIds,setFollowingIds]=useState([]);const[following,setFollowing]=useState([]);
+  const[friendSearch,setFriendSearch]=useState("");const[friendResults,setFriendResults]=useState([]);const[followingIds,setFollowingIds]=useState([]);const[following,setFollowing]=useState([]);const[followers,setFollowers]=useState([]);
   const[viewUser,setViewUser]=useState(null);const[viewUserRecipes,setViewUserRecipes]=useState([]);
   const[savedRecipes,setSavedRecipes]=useState([]);const[myRecipes,setMyRecipes]=useState([]);
   const csvRef=useRef(null);const cookedRef=useRef(null);
@@ -131,7 +158,7 @@ export default function Stewdium(){
   useEffect(()=>{if(viewing){db.getCookedPhotos(viewing.id).then(({data})=>setCookedPhotos(data));db.getComments(viewing.id).then(({data})=>setComments(data));}},[viewing]);
   useEffect(()=>{if(user&&page==="planner"){db.getMealPlan(user.id,getWeekStart()).then(({data})=>{const p={};DAYS.forEach(d=>{p[d]={};MEALS_L.forEach(m=>{p[d][m]=null;});});data.forEach(i=>{if(p[i.day_of_week])p[i.day_of_week][i.meal_type]=i.recipes;});setMealPlan(p);});}},[user,page]);
   useEffect(()=>{if(user&&page==="board"){db.getSavedRecipes(user.id).then(({data})=>setSavedRecipes(data));db.getUserRecipes(user.id).then(({data})=>setMyRecipes(data));}},[user,page]);
-  useEffect(()=>{if(user&&page==="friends"){db.getFollowing(user.id).then(({data})=>setFollowing(data));}},[user,page]);
+  useEffect(()=>{if(user&&(page==="friends"||page==="profile")){db.getFollowing(user.id).then(({data})=>setFollowing(data));db.getFollowers(user.id).then(({data})=>setFollowers(data));}},[user,page]);
 
   // Auth
   const handleSignup=async()=>{setAuthError("");const{error}=await db.signUp(authForm.email,authForm.password,{name:authForm.name||"New Cook",bio:authForm.bio||"I love cooking!",newsletter:authForm.newsletter});if(error){setAuthError(error.message);return;}setAuthModal(null);setAuthForm({name:"",email:"",password:"",bio:"",newsletter:true});};
@@ -212,10 +239,39 @@ export default function Stewdium(){
   // Friends
   const searchFriends=async q=>{setFriendSearch(q);if(q.length<2){setFriendResults([]);return;}const{data}=await db.searchProfiles(q);setFriendResults(data.filter(p=>p.id!==user?.id));};
   const toggleFollow=async id=>{if(followingIds.includes(id)){await db.unfollowUser(user.id,id);setFollowingIds(p=>p.filter(x=>x!==id));setFollowing(p=>p.filter(x=>x.id!==id));}else{await db.followUser(user.id,id);setFollowingIds(p=>[...p,id]);db.getFollowing(user.id).then(({data})=>setFollowing(data));}};
-  const viewProfile=async id=>{const{data:p}=await db.getPublicProfile(id);const{data:r}=await db.getPublicRecipesByUser(id);setViewUser(p);setViewUserRecipes(r);setPage("viewUser");};
+  const[viewUserFollowerCount,setViewUserFollowerCount]=useState(0);
+  const viewProfile=async id=>{const{data:p}=await db.getPublicProfile(id);const{data:r}=await db.getPublicRecipesByUser(id);const{data:f}=await db.getFollowers(id);setViewUser(p);setViewUserRecipes(r);setViewUserFollowerCount(f?.length||0);setPage("viewUser");};
 
   const handleFooterNl=async()=>{if(nlEmail.includes("@")){await db.subscribeNewsletter(nlEmail);setFooterNlOk(true);setNlEmail("");}};
   const setMealSlot=async(day,meal,recipe)=>{await db.setMealPlanSlot(user.id,day,meal,recipe?.id||null,getWeekStart());setMealPlan(p=>({...p,[day]:{...p[day],[meal]:recipe}}));setPicker(null);};
+  const autoFillMealPlan=async()=>{
+    const pool=[...myRecipes,...savedRecipes].filter((r,i,a)=>a.findIndex(x=>x.id===r.id)===i);
+    if(!pool.length){alert("Add or save some recipes first!");return;}
+    const newPlan={...mealPlan};
+    for(const d of DAYS){
+      if(!newPlan[d])newPlan[d]={};
+      for(const m of MEALS_L){
+        if(!newPlan[d][m]){
+          const pick=pool[Math.floor(Math.random()*pool.length)];
+          await db.setMealPlanSlot(user.id,d,m,pick.id,getWeekStart());
+          newPlan[d]={...newPlan[d],[m]:pick};
+        }
+      }
+    }
+    setMealPlan({...newPlan});
+  };
+  const clearMealPlan=async()=>{
+    if(!window.confirm("Clear all meals this week?"))return;
+    const newPlan={};
+    for(const d of DAYS){
+      newPlan[d]={};
+      for(const m of MEALS_L){
+        if(mealPlan[d]?.[m])await db.setMealPlanSlot(user.id,d,m,null,getWeekStart());
+        newPlan[d][m]=null;
+      }
+    }
+    setMealPlan(newPlan);
+  };
   const updateProfileField=async(field,value)=>{setProfile(p=>({...p,[field]:value}));await db.updateProfile(user.id,{[field]:value});};
   const uploadAvatar=async f=>{const ext=f.name.split('.').pop();const path=`${user.id}/avatar.${ext}`;const{url}=await db.uploadImage('profile-avatars',path,f);if(url){setProfile(p=>({...p,avatar_url:url}));await db.updateProfile(user.id,{avatar_url:url});}};
   const toggleAllergy=async a=>{const cur=profile?.allergies||[];const next=cur.includes(a)?cur.filter(x=>x!==a):[...cur,a];setProfile(p=>({...p,allergies:next}));await db.updateProfile(user.id,{allergies:next});};
@@ -233,7 +289,7 @@ export default function Stewdium(){
     {/* FIX #1: stewdium as one word */}
     <div className="nav-logo" onClick={()=>{setPage("home");setViewing(null);}}><img src="/logo.png" alt="Stewdium" style={{height:36,width:"auto"}}/> <span style={{color:"var(--pink-400)"}}>stew</span>dium</div>
     <div className="nav-links">
-      <button className={`nav-link ${page==="home"?"active":""}`} onClick={()=>setPage("home")}>Browse</button>
+      <button className={`nav-link ${page==="home"?"active":""}`} onClick={()=>setPage("home")}>Home</button>
       <button className={`nav-link ${page==="board"?"active":""}`} onClick={()=>{if(!user)setAuthModal("login");else setPage("board");}}>My Board</button>
       <button className={`nav-link ${page==="planner"?"active":""}`} onClick={()=>{if(!user)setAuthModal("login");else setPage("planner");}}>Meal Plan</button>
       <button className={`nav-link ${page==="friends"?"active":""}`} onClick={()=>{if(!user)setAuthModal("login");else setPage("friends");}}>Friends</button>
@@ -290,7 +346,7 @@ export default function Stewdium(){
   {page==="addRecipe"&&newRecipe&&<div style={{maxWidth:640,margin:"0 auto"}}><button className="back-btn" onClick={()=>{setNewRecipe(null);setPage("board");}}>← Back</button>
     <div className="page-title">{newRecipe.id?"Edit Recipe":"Add a Recipe"}</div>
     <div className="card-static" style={{padding:28}}>
-      <div className="form-group"><label className="form-label">Recipe Photo</label><ImageUpload value={newRecipe.imageFile||newRecipe.existingImageUrl} onChange={f=>setNewRecipe({...newRecipe,imageFile:f})} height={220}/></div>
+      <div className="form-group"><label className="form-label">Recipe Photo</label><ImageUpload value={newRecipe.imageFile||newRecipe.existingImageUrl} onChange={f=>setNewRecipe({...newRecipe,imageFile:f})} height={220} cropAspect={4/3}/></div>
       <div className="form-group"><label className="form-label">Title *</label><input className="form-input" placeholder="e.g., Grandma's Apple Pie" value={newRecipe.title} onChange={e=>setNewRecipe({...newRecipe,title:e.target.value})}/></div>
       <div className="form-group"><label className="form-label">Description</label><textarea className="form-input form-textarea" value={newRecipe.description} onChange={e=>setNewRecipe({...newRecipe,description:e.target.value})}/></div>
       <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div className="form-group" style={{flex:1,minWidth:120}}><label className="form-label">Category</label><select className="form-input" value={newRecipe.category} onChange={e=>setNewRecipe({...newRecipe,category:e.target.value})}>{CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}</select></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Servings</label><input className="form-input" type="number" min="1" value={newRecipe.servings} onChange={e=>setNewRecipe({...newRecipe,servings:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Prep Time</label><input className="form-input" placeholder="15 min" value={newRecipe.prepTime} onChange={e=>setNewRecipe({...newRecipe,prepTime:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Cook Time</label><input className="form-input" placeholder="30 min" value={newRecipe.cookTime} onChange={e=>setNewRecipe({...newRecipe,cookTime:e.target.value})}/></div></div>
@@ -321,7 +377,8 @@ export default function Stewdium(){
     </div></div>}
 
   {/* PLANNER */}
-  {page==="planner"&&user&&<><div className="page-title">Meal Planner</div><div className="page-subtitle">{recipes.length===0?"Add some recipes first, then plan your week here.":"Plan your week"}</div>
+  {page==="planner"&&user&&<><div className="page-title">Meal Planner</div><div className="page-subtitle">{recipes.length===0?"Add some recipes first, then plan your week here.":"Plan your week -- build your own or auto-generate"}</div>
+    <div style={{display:"flex",gap:8,marginBottom:20,flexWrap:"wrap"}}><button className="btn btn-primary btn-sm" onClick={autoFillMealPlan}>Auto-fill empty slots</button><button className="btn btn-secondary btn-sm" onClick={clearMealPlan}>Clear week</button></div>
     <div className="planner-grid">{DAYS.map(d=><div key={d} className="planner-day"><div className="planner-day-name">{d}</div>{MEALS_L.map(m=><div key={m} className="planner-meal"><div className="planner-meal-label">{m}</div>{mealPlan[d]?.[m]?<div className="planner-meal-slot filled"><span style={{fontSize:14}}>{mealPlan[d][m].emoji||"🍽️"}</span><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{mealPlan[d][m].title}</span><button className="rm" onClick={()=>setMealSlot(d,m,null)}>✕</button></div>:<div className="planner-meal-slot" onClick={()=>{if(recipes.length)setPicker({day:d,meal:m});else alert("Add some recipes first!");}}>+ Add</div>}</div>)}</div>)}</div></>}
 
   {/* FRIENDS */}
@@ -333,15 +390,15 @@ export default function Stewdium(){
 
   {/* VIEW USER PROFILE */}
   {page==="viewUser"&&viewUser&&<><button className="back-btn" onClick={()=>setPage("friends")}>← Back</button>
-    <div className="profile-header"><div className="profile-avatar">{viewUser.avatar_url?<img src={viewUser.avatar_url} alt=""/>:(viewUser.name||"?")[0].toUpperCase()}</div><div><div className="profile-name">{viewUser.name}</div><div className="profile-bio">{viewUser.bio}</div>{viewUser.allergies_public&&viewUser.allergies?.length>0&&<div style={{marginTop:8}}><span style={{fontSize:12,fontWeight:700,color:"var(--gray-400)"}}>Allergies: </span>{viewUser.allergies.map(a=>{const al=ALLERGEN_LIST.find(x=>x.id===a);return al?<span key={a} style={{fontSize:12,marginRight:4}}>{al.icon} {al.label}</span>:null;})}</div>}<div className="profile-stats"><span className="profile-stat">📖 {viewUserRecipes.length} public recipes</span></div>{user&&user.id!==viewUser.id&&<button className={`btn btn-sm ${followingIds.includes(viewUser.id)?"btn-secondary":"btn-primary"}`} style={{marginTop:8}} onClick={()=>toggleFollow(viewUser.id)}>{followingIds.includes(viewUser.id)?"Following":"Follow"}</button>}</div></div>
+    <div className="profile-header"><div className="profile-avatar">{viewUser.avatar_url?<img src={viewUser.avatar_url} alt=""/>:(viewUser.name||"?")[0].toUpperCase()}</div><div><div className="profile-name">{viewUser.name}</div><div className="profile-bio">{viewUser.bio}</div>{viewUser.allergies_public&&viewUser.allergies?.length>0&&<div style={{marginTop:8}}><span style={{fontSize:12,fontWeight:700,color:"var(--gray-400)"}}>Allergies: </span>{viewUser.allergies.map(a=>{const al=ALLERGEN_LIST.find(x=>x.id===a);return al?<span key={a} style={{fontSize:12,marginRight:4}}>{al.icon} {al.label}</span>:null;})}</div>}<div className="profile-stats"><span className="profile-stat">📖 {viewUserRecipes.length} public recipes</span><span className="profile-stat">👤 {viewUserFollowerCount} followers</span></div>{user&&user.id!==viewUser.id&&<button className={`btn btn-sm ${followingIds.includes(viewUser.id)?"btn-secondary":"btn-primary"}`} style={{marginTop:8}} onClick={()=>toggleFollow(viewUser.id)}>{followingIds.includes(viewUser.id)?"Following":"Follow"}</button>}</div></div>
     {viewUserRecipes.length>0&&<div className="recipe-grid">{viewUserRecipes.map(r=><div key={r.id} className="card recipe-card" onClick={()=>openRecipe(r)}><RImg r={r}/><span className="recipe-card-badge">{r.category}</span><div className="recipe-card-body"><div className="recipe-card-title">{r.title}</div><div className="recipe-card-meta"><span>⏱ {r.cook_time}</span><span>👍 {r.like_count||0}</span></div></div></div>)}</div>}</>}
 
   {/* PROFILE */}
   {page==="profile"&&user&&<>{!profile?<div className="loading"><div className="loading-spinner"/></div>:<>
-    <div className="profile-header"><div className="profile-avatar">{profile.avatar_url?<img src={profile.avatar_url} alt=""/>:(profile.name||"U")[0].toUpperCase()}</div><div><div className="profile-name">{profile.name}</div><div className="profile-bio">{profile.bio}</div><div className="profile-stats"><span className="profile-stat">📖 {myRecipes.length} recipes</span><span className="profile-stat">❤️ {savedIds.length} saved</span><span className="profile-stat">👥 {followingIds.length} following</span></div></div></div>
+    <div className="profile-header"><div className="profile-avatar">{profile.avatar_url?<img src={profile.avatar_url} alt=""/>:(profile.name||"U")[0].toUpperCase()}</div><div><div className="profile-name">{profile.name}</div><div className="profile-bio">{profile.bio}</div><div className="profile-stats"><span className="profile-stat">📖 {myRecipes.length} recipes</span><span className="profile-stat">❤️ {savedIds.length} saved</span><span className="profile-stat">👥 {followingIds.length} following</span><span className="profile-stat">👤 {followers.length} followers</span></div></div></div>
     <div className="card-static" style={{padding:28,marginBottom:24}}>
       <div className="section-title" style={{borderColor:"var(--sage-200)"}}>Edit Profile</div>
-      <div className="form-group"><label className="form-label">Profile Picture</label><ImageUpload value={profile.avatar_url} onChange={f=>uploadAvatar(f)} round label="Change photo"/></div>
+      <div className="form-group"><label className="form-label">Profile Picture</label><ImageUpload value={profile.avatar_url} onChange={f=>uploadAvatar(f)} round label="Change photo" cropAspect={1}/></div>
       <div className="form-group"><label className="form-label">Display Name</label><input className="form-input" value={profile.name||""} onChange={e=>updateProfileField('name',e.target.value)}/></div>
       <div className="form-group"><label className="form-label">Bio</label><textarea className="form-input form-textarea" placeholder="Tell people about yourself..." value={profile.bio||""} onChange={e=>updateProfileField('bio',e.target.value)}/></div>
     </div>
@@ -350,6 +407,10 @@ export default function Stewdium(){
       <p style={{fontSize:13,color:"var(--gray-500)",marginBottom:12}}>Select your allergies. Recipes with these ingredients will show warnings.</p>
       <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{ALLERGEN_LIST.map(a=><button key={a.id} className={`allergy-chip ${uAllergies.includes(a.id)?"active":""}`} onClick={()=>toggleAllergy(a.id)}>{a.icon} {a.label}</button>)}</div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginTop:16}}><div className={`toggle-track ${profile.allergies_public?"on":""}`} onClick={()=>updateProfileField('allergies_public',!profile.allergies_public)}><div className="toggle-knob"/></div><span style={{fontSize:13,fontWeight:600,color:"var(--gray-600)"}}>{profile.allergies_public?"🌎 Visible on your profile":"🔒 Private"}</span></div>
+    </div>
+    <div className="card-static" style={{padding:28,marginBottom:24}}>
+      <div className="section-title" style={{borderColor:"var(--sage-200)"}}>👤 Followers ({followers.length})</div>
+      {followers.length===0?<div style={{color:"var(--gray-400)",fontSize:13}}>No followers yet</div>:followers.map(p=><div key={p.id} className="friend-card" onClick={()=>viewProfile(p.id)}><div className="friend-avatar">{p.avatar_url?<img src={p.avatar_url} alt=""/>:(p.name||"?")[0].toUpperCase()}</div><div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{p.name}</div><div style={{fontSize:12,color:"var(--gray-400)"}}>{p.bio}</div></div></div>)}
     </div>
     <button className="btn btn-pink" onClick={async()=>{await db.signOut();setPage("home");}}>Sign Out</button></>}</>}
 
