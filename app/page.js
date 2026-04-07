@@ -247,12 +247,19 @@ export default function Stewdium(){
   const autoFillMealPlan=async()=>{
     const pool=[...myRecipes,...savedRecipes].filter((r,i,a)=>a.findIndex(x=>x.id===r.id)===i);
     if(!pool.length){alert("Add or save some recipes first!");return;}
+    const byCategory={};pool.forEach(r=>{const cat=(r.category||"Dinner").toLowerCase();if(!byCategory[cat])byCategory[cat]=[];byCategory[cat].push(r);});
+    const pickFor=meal=>{
+      const key=meal.toLowerCase();
+      const matched=byCategory[key];
+      if(matched&&matched.length)return matched[Math.floor(Math.random()*matched.length)];
+      return pool[Math.floor(Math.random()*pool.length)];
+    };
     const newPlan={...mealPlan};
     for(const d of DAYS){
       if(!newPlan[d])newPlan[d]={};
       for(const m of MEALS_L){
         if(!newPlan[d][m]){
-          const pick=pool[Math.floor(Math.random()*pool.length)];
+          const pick=pickFor(m);
           await db.setMealPlanSlot(user.id,d,m,pick.id,getWeekStart());
           newPlan[d]={...newPlan[d],[m]:pick};
         }
