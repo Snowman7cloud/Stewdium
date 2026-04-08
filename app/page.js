@@ -35,40 +35,37 @@ function CropModal({file,aspect=1,onDone,onCancel}){
   const canvasRef=useRef(null);const imgRef=useRef(null);
   const[pos,setPos]=useState({x:0,y:0});const[zoom,setZoom]=useState(100);
   const[dragging,setDragging]=useState(false);const dragStart=useRef({x:0,y:0,px:0,py:0});
+  const[nat,setNat]=useState(null);
   const boxW=280,boxH=Math.round(280/aspect);
-  // zoom 100 = image covers box exactly, 200 = 2x zoom, etc.
-  const imgStyle=()=>{const z=zoom/100;
-    return{position:"absolute",left:"50%",top:"50%",
-      transform:`translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,
-      width:boxW*z,height:"auto",minHeight:boxH*z,objectFit:"cover",
-      maxWidth:"none",maxHeight:"none",pointerEvents:"none",userSelect:"none"};};
+  // Calculate display dimensions: at zoom=100 image "covers" the box
+  const getDisp=()=>{if(!nat)return{w:boxW,h:boxH};const z=zoom/100;const imgR=nat.w/nat.h;const boxR=boxW/boxH;
+    if(imgR>boxR){const h=boxH*z;return{w:h*imgR,h};}else{const w=boxW*z;return{w,h:w/imgR};}};
+  const disp=getDisp();
   const handleMouseDown=e=>{e.preventDefault();e.stopPropagation();setDragging(true);dragStart.current={x:e.clientX,y:e.clientY,px:pos.x,py:pos.y};};
   const handleMouseMove=e=>{if(!dragging)return;setPos({x:dragStart.current.px+(e.clientX-dragStart.current.x),y:dragStart.current.py+(e.clientY-dragStart.current.y)});};
   const handleMouseUp=()=>setDragging(false);
   const handleWheel=e=>{e.preventDefault();setZoom(z=>Math.max(100,Math.min(400,z+(e.deltaY>0?-10:10))));};
   const handleTouchStart=e=>{if(e.touches.length===1){const t=e.touches[0];setDragging(true);dragStart.current={x:t.clientX,y:t.clientY,px:pos.x,py:pos.y};}};
   const handleTouchMove=e=>{if(dragging&&e.touches.length===1){const t=e.touches[0];setPos({x:dragStart.current.px+(t.clientX-dragStart.current.x),y:dragStart.current.py+(t.clientY-dragStart.current.y)});}};
-  const crop=()=>{const img=imgRef.current;if(!img)return;
+  const crop=()=>{const img=imgRef.current;if(!img||!nat)return;
     const c=canvasRef.current;const outSize=512;c.width=outSize;c.height=Math.round(outSize/aspect);
-    const ctx=c.getContext("2d");
-    const z=zoom/100;const dw=boxW*z;
-    const imgR=img.naturalWidth/img.naturalHeight;
-    const dh=Math.max(boxH*z,dw/imgR);const actualW=dh*imgR;
-    const imgLeft=(boxW-actualW)/2+pos.x;const imgTop=(boxH-dh)/2+pos.y;
-    const sx=(-imgLeft/actualW)*img.naturalWidth;const sy=(-imgTop/dh)*img.naturalHeight;
-    const sw=(boxW/actualW)*img.naturalWidth;const sh=(boxH/dh)*img.naturalHeight;
-    ctx.drawImage(img,Math.max(0,sx),Math.max(0,sy),sw,sh,0,0,c.width,c.height);
+    const ctx=c.getContext("2d");const d=getDisp();
+    const imgLeft=(boxW-d.w)/2+pos.x;const imgTop=(boxH-d.h)/2+pos.y;
+    const sx=(-imgLeft/d.w)*nat.w;const sy=(-imgTop/d.h)*nat.h;
+    const sw=(boxW/d.w)*nat.w;const sh=(boxH/d.h)*nat.h;
+    ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
     c.toBlob(blob=>{if(blob)onDone(new File([blob],"cropped.jpg",{type:"image/jpeg"}));},"image/jpeg",.92);};
-  const src=typeof file==="string"?file:URL.createObjectURL(file);
+  const src=useMemo(()=>typeof file==="string"?file:URL.createObjectURL(file),[file]);
   return(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onTouchEnd={()=>setDragging(false)}>
     <div style={{color:"#fff",fontWeight:700,fontSize:14,marginBottom:12}}>Drag to reposition, scroll to zoom</div>
     <div style={{width:boxW,height:boxH,borderRadius:aspect===1?'50%':12,overflow:"hidden",border:"3px solid #fff",position:"relative",cursor:dragging?"grabbing":"grab",touchAction:"none",background:"#000"}} onMouseDown={handleMouseDown} onWheel={handleWheel} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}>
-      <img ref={imgRef} src={src} alt="" onLoad={()=>setZoom(100)} style={imgStyle()} draggable={false}/>
+      <img ref={imgRef} src={src} alt="" onLoad={()=>{const i=imgRef.current;if(i)setNat({w:i.naturalWidth,h:i.naturalHeight});}} style={{position:"absolute",left:"50%",top:"50%",transform:`translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`,width:disp.w,height:disp.h,maxWidth:"none",maxHeight:"none",pointerEvents:"none",userSelect:"none"}} draggable={false}/>
     </div>
     <div style={{display:"flex",alignItems:"center",gap:12,marginTop:16}} onMouseDown={e=>e.stopPropagation()}>
-      <span style={{color:"#fff",fontSize:13,fontWeight:600,minWidth:24}}>-</span>
-      <input type="range" min="100" max="400" value={zoom} onChange={e=>setZoom(parseInt(e.target.value))} style={{width:200,accentColor:"var(--sage-400)"}}/>
-      <span style={{color:"#fff",fontSize:13,fontWeight:600,minWidth:24}}>+</span>
+      <span style={{color:"#fff",fontSize:13,fontWeight:600}}>-</span>
+      <input type="range" min={100} max={400} step={1} value={zoom} onInput={e=>setZoom(Number(e.target.value))} onChange={e=>setZoom(Number(e.target.value))} style={{width:200,accentColor:"var(--sage-400)",cursor:"pointer"}}/>
+      <span style={{color:"#fff",fontSize:13,fontWeight:600}}>+</span>
+      <span style={{color:"var(--gray-400)",fontSize:12}}>{zoom}%</span>
     </div>
     <div style={{display:"flex",gap:12,marginTop:16}}>
       <button className="btn btn-primary" onClick={crop}>Apply</button>
