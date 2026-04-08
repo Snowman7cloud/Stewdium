@@ -47,14 +47,21 @@ function CropModal({file,aspect=1,onDone,onCancel}){
   const handleWheel=e=>{e.preventDefault();setZoom(z=>Math.max(100,Math.min(400,z+(e.deltaY>0?-10:10))));};
   const handleTouchStart=e=>{if(e.touches.length===1){const t=e.touches[0];setDragging(true);dragStart.current={x:t.clientX,y:t.clientY,px:pos.x,py:pos.y};}};
   const handleTouchMove=e=>{if(dragging&&e.touches.length===1){const t=e.touches[0];setPos({x:dragStart.current.px+(t.clientX-dragStart.current.x),y:dragStart.current.py+(t.clientY-dragStart.current.y)});}};
-  const crop=()=>{const img=imgRef.current;if(!img||!nat)return;
-    const c=canvasRef.current;const outSize=512;c.width=outSize;c.height=Math.round(outSize/aspect);
-    const ctx=c.getContext("2d");const d=getDisp();
-    const imgLeft=(boxW-d.w)/2+pos.x;const imgTop=(boxH-d.h)/2+pos.y;
-    const sx=(-imgLeft/d.w)*nat.w;const sy=(-imgTop/d.h)*nat.h;
-    const sw=(boxW/d.w)*nat.w;const sh=(boxH/d.h)*nat.h;
-    ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
-    c.toBlob(blob=>{if(blob)onDone(new File([blob],"cropped.jpg",{type:"image/jpeg"}));},"image/jpeg",.92);};
+  const crop=()=>{const img=imgRef.current;
+    // If image dimensions aren't loaded yet, just pass the original file through
+    if(!img||!nat){onDone(file instanceof File?file:null);return;}
+    try{
+      const c=canvasRef.current;const outSize=512;c.width=outSize;c.height=Math.round(outSize/aspect);
+      const ctx=c.getContext("2d");const d=getDisp();
+      const imgLeft=(boxW-d.w)/2+pos.x;const imgTop=(boxH-d.h)/2+pos.y;
+      const sx=Math.max(0,(-imgLeft/d.w)*nat.w);const sy=Math.max(0,(-imgTop/d.h)*nat.h);
+      const sw=Math.min(nat.w-sx,(boxW/d.w)*nat.w);const sh=Math.min(nat.h-sy,(boxH/d.h)*nat.h);
+      ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+      c.toBlob(blob=>{
+        if(blob){onDone(new File([blob],"cropped.jpg",{type:"image/jpeg"}));}
+        else{onDone(file instanceof File?file:null);}
+      },"image/jpeg",.92);
+    }catch(e){console.error("Crop failed, using original:",e);onDone(file instanceof File?file:null);}};
   const src=useMemo(()=>typeof file==="string"?file:URL.createObjectURL(file),[file]);
   return(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onTouchEnd={()=>setDragging(false)}>
     <div style={{color:"#fff",fontWeight:700,fontSize:14,marginBottom:12}}>Drag to reposition, scroll to zoom</div>
@@ -77,7 +84,7 @@ function CropModal({file,aspect=1,onDone,onCancel}){
 function ImageUpload({value,onChange,height=200,label="Upload a photo",round=false,cropAspect}){
   const ref=useRef(null);const[drag,setDrag]=useState(false);const[cropFile,setCropFile]=useState(null);
   const hf=async f=>{if(!f||!f.type.startsWith("image/"))return;if(cropAspect!==undefined){setCropFile(f);}else{onChange(f);}};
-  const onCropDone=f=>{setCropFile(null);onChange(f);};
+  const onCropDone=f=>{setCropFile(null);if(f)onChange(f);};
   if(round)return(<div style={{display:"inline-block"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||1} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}<div onClick={()=>{if(!cropFile)ref.current?.click();}} style={{width:80,height:80,borderRadius:"50%",overflow:"hidden",background:value?"none":"linear-gradient(135deg,var(--pink-200),var(--sage-200))",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"3px dashed var(--sage-300)"}}>{value?<img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:24}}>📷</span>}</div><input ref={ref} type="file" accept="image/*" onChange={e=>{e.target.files?.[0]&&hf(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/><div style={{fontSize:11,color:"var(--gray-400)",textAlign:"center",marginTop:4}}>{label}</div></div>);
   return(<div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(e.dataTransfer?.files?.[0])hf(e.dataTransfer.files[0]);}} onClick={()=>{if(!cropFile)ref.current?.click();}} style={{height,borderRadius:"var(--radius)",overflow:"hidden",border:drag?"3px dashed var(--sage-400)":value?"none":"3px dashed var(--gray-300)",background:value?"none":"linear-gradient(135deg,var(--pink-50),var(--sage-50),var(--blue-50))",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||4/3} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}{value?(<><img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/><div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.6)",color:"#fff",padding:"4px 10px",borderRadius:99,fontSize:12,fontWeight:700}}>Change</div></>):(<><span style={{fontSize:36,marginBottom:8}}>📸</span><span style={{fontWeight:700,fontSize:14,color:"var(--gray-500)"}}>{label}</span><span style={{fontSize:12,color:"var(--gray-400)",marginTop:2}}>Drag & drop or click</span></>)}<input ref={ref} type="file" accept="image/*" onChange={e=>{e.target.files?.[0]&&hf(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></div>);
 }
