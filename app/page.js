@@ -11,7 +11,7 @@ function cn(n){if(n===Math.floor(n))return n;const f=[[.125,"⅛"],[.25,"¼"],[.
 function fmtAmt(a,u){const unit=u?.toLowerCase()||"",c=CONV[unit];if(!c)return`${a} ${u||""}`.trim();const pl=typeof a==="number"?a!==1:!a.toString().match(/^1$|^1 /);return`${a} ${pl?c.plural:c.name}`.trim();}
 function parseFrac(s){if(!s)return 0;const str=String(s).trim();const mixed=str.match(/^(\d+)\s+(\d+)\/(\d+)$/);if(mixed)return parseInt(mixed[1])+parseInt(mixed[2])/parseInt(mixed[3]);const frac=str.match(/^(\d+)\/(\d+)$/);if(frac)return parseInt(frac[1])/parseInt(frac[2]);return parseFloat(str)||0;}
 
-const CATEGORIES=["All","Breakfast","Lunch","Dinner","Dessert","Snack","Drinks","Sides","Sauce"];
+const CATEGORIES=["All","Breakfast","Lunch","Dinner","Baking","Dessert","Snack","Drinks","Sides","Sauce"];
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const MEALS_L=["Breakfast","Lunch","Dinner"];
 function getWeekStart(){const d=new Date();d.setDate(d.getDate()-d.getDay()+1);return d.toISOString().split('T')[0];}
@@ -33,16 +33,19 @@ function suggestDietTags(ingredients){
 // ─── Components ───
 function CropModal({file,aspect=1,onDone,onCancel}){
   const canvasRef=useRef(null);const imgRef=useRef(null);
-  const[pos,setPos]=useState({x:0,y:0});const[scale,setScale]=useState(1);
+  const[pos,setPos]=useState({x:0,y:0});const[zoom,setZoom]=useState(50);
   const[dragging,setDragging]=useState(false);const dragStart=useRef({x:0,y:0,px:0,py:0});
-  const[imgSize,setImgSize]=useState({w:0,h:0});
+  const[imgSize,setImgSize]=useState({w:0,h:0});const fitScaleRef=useRef(1);
   const boxW=280,boxH=Math.round(280/aspect);
-  const onLoad=()=>{const img=imgRef.current;if(!img)return;setImgSize({w:img.naturalWidth,h:img.naturalHeight});
-    const fitScale=Math.max(boxW/img.naturalWidth,boxH/img.naturalHeight);setScale(fitScale);};
+  const zoomToScale=z=>{const min=fitScaleRef.current;const max=min*5;return min+(max-min)*(z/100);};
+  const scale=zoomToScale(zoom);
+  const onLoad=()=>{const img=imgRef.current;if(!img)return;
+    const nw=img.naturalWidth,nh=img.naturalHeight;setImgSize({w:nw,h:nh});
+    fitScaleRef.current=Math.max(boxW/nw,boxH/nh);setZoom(50);setPos({x:0,y:0});};
   const handleMouseDown=e=>{e.preventDefault();e.stopPropagation();setDragging(true);dragStart.current={x:e.clientX,y:e.clientY,px:pos.x,py:pos.y};};
   const handleMouseMove=e=>{if(!dragging)return;setPos({x:dragStart.current.px+(e.clientX-dragStart.current.x),y:dragStart.current.py+(e.clientY-dragStart.current.y)});};
   const handleMouseUp=()=>setDragging(false);
-  const handleWheel=e=>{e.preventDefault();setScale(s=>Math.max(.1,Math.min(10,s*(e.deltaY>0?.95:1.05))));};
+  const handleWheel=e=>{e.preventDefault();setZoom(z=>Math.max(0,Math.min(100,z+(e.deltaY>0?-3:3))));};
   const handleTouchStart=e=>{if(e.touches.length===1){const t=e.touches[0];setDragging(true);dragStart.current={x:t.clientX,y:t.clientY,px:pos.x,py:pos.y};}};
   const handleTouchMove=e=>{if(dragging&&e.touches.length===1){const t=e.touches[0];setPos({x:dragStart.current.px+(t.clientX-dragStart.current.x),y:dragStart.current.py+(t.clientY-dragStart.current.y)});}};
   const crop=()=>{const img=imgRef.current;if(!img||!imgSize.w)return;
@@ -62,7 +65,7 @@ function CropModal({file,aspect=1,onDone,onCancel}){
     </div>
     <div style={{display:"flex",alignItems:"center",gap:12,marginTop:12}}>
       <span style={{color:"#fff",fontSize:12}}>Zoom</span>
-      <input type="range" min="10" max="500" value={Math.round(scale*100)} onChange={e=>setScale(parseInt(e.target.value)/100)} style={{width:180,accentColor:"var(--sage-400)"}}/>
+      <input type="range" min="0" max="100" value={zoom} onChange={e=>setZoom(parseInt(e.target.value))} style={{width:180,accentColor:"var(--sage-400)"}}/>
     </div>
     <div style={{display:"flex",gap:12,marginTop:16}}>
       <button className="btn btn-primary" onClick={crop}>Apply</button>
@@ -167,7 +170,7 @@ export default function Stewdium(){
     return()=>subscription.unsubscribe();
   },[]);
 
-  const loadRecipes=useCallback(async()=>{setLoading(true);const{data}=await db.getRecipes({category:catFilter,search});if(sortBy==="popular")data.sort((a,b)=>(b.like_count||0)-(a.like_count||0));setRecipes(data);setLoading(false);},[catFilter,search,sortBy]);
+  const loadRecipes=useCallback(async()=>{setLoading(true);const{data}=await db.getRecipes({search});if(sortBy==="popular")data.sort((a,b)=>(b.like_count||0)-(a.like_count||0));setRecipes(data);setLoading(false);},[search,sortBy]);
   useEffect(()=>{loadRecipes();},[loadRecipes]);
   useEffect(()=>{if(viewing){db.getCookedPhotos(viewing.id).then(({data})=>setCookedPhotos(data));db.getComments(viewing.id).then(({data})=>setComments(data));}},[viewing]);
   useEffect(()=>{if(user&&page==="planner"){db.getMealPlan(user.id,getWeekStart()).then(({data})=>{const p={};DAYS.forEach(d=>{p[d]={};MEALS_L.forEach(m=>{p[d][m]=null;});});data.forEach(i=>{if(p[i.day_of_week])p[i.day_of_week][i.meal_type]=i.recipes;});setMealPlan(p);});}},[user,page]);
@@ -182,7 +185,7 @@ export default function Stewdium(){
   const toggleSave=async id=>{if(!user){setAuthModal("login");return;}if(savedIds.includes(id)){await db.unsaveRecipe(user.id,id);setSavedIds(p=>p.filter(x=>x!==id));}else{await db.saveRecipe(user.id,id);setSavedIds(p=>[...p,id]);}};
   const toggleLike=async id=>{if(!user){setAuthModal("login");return;}if(likedIds.includes(id)){await db.unlikeRecipe(user.id,id);setLikedIds(p=>p.filter(x=>x!==id));setRecipes(p=>p.map(r=>r.id===id?{...r,like_count:(r.like_count||1)-1}:r));}else{await db.likeRecipe(user.id,id);setLikedIds(p=>[...p,id]);setRecipes(p=>p.map(r=>r.id===id?{...r,like_count:(r.like_count||0)+1}:r));}};
   const openRecipe=r=>{setViewing(r);setScaleValue(null);setScaleMode("servings");setCommentText("");setPage("recipe");};
-  const handleAddRecipe=()=>{if(!user){setAuthModal("login");return;}setNewRecipe({title:"",description:"",category:"Dinner",prepTime:"",cookTime:"",servings:4,ingredients:[{amount:"",unit:"",name:""}],steps:[""],isPublic:true,imageFile:null,emoji:"🍽️",dietTags:[],allergenTags:[]});setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");};
+  const handleAddRecipe=()=>{if(!user){setAuthModal("login");return;}setNewRecipe({title:"",description:"",categories:["Dinner"],prepTime:"",cookTime:"",servings:4,ingredients:[{amount:"",unit:"",name:""}],steps:[""],isPublic:true,imageFile:null,emoji:"🍽️",dietTags:[],allergenTags:[]});setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");};
 
   const handleEditRecipe=r=>{
     if(!user||user.id!==r.user_id)return;
@@ -190,7 +193,7 @@ export default function Stewdium(){
       id:r.id,
       title:r.title||"",
       description:r.description||"",
-      category:r.category||"Dinner",
+      categories:(r.category||"Dinner").split(",").map(c=>c.trim()).filter(Boolean),
       prepTime:r.prep_time||"",
       cookTime:r.cook_time||"",
       servings:r.servings||4,
@@ -228,7 +231,7 @@ export default function Stewdium(){
     const ings=newRecipe.ingredients.filter(i=>i.name).map(i=>({...i,amount:parseFrac(i.amount)}));
     const steps=newRecipe.steps.filter(s=>s.trim());
     const nutrition=calculateNutrition(ings,parseInt(newRecipe.servings)||4);
-    const payload={title:newRecipe.title,description:newRecipe.description,category:newRecipe.category,prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:newRecipe.allergenTags||[],nutrition,tags:newRecipe.dietTags||[]};
+    const payload={title:newRecipe.title,description:newRecipe.description,category:(newRecipe.categories||[]).join(","),prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:newRecipe.allergenTags||[],nutrition,tags:newRecipe.dietTags||[]};
     if(newRecipe.id){
       await db.updateRecipe(newRecipe.id,payload);
     }else{
@@ -259,7 +262,7 @@ export default function Stewdium(){
   const autoFillMealPlan=async()=>{
     const pool=[...myRecipes,...savedRecipes].filter((r,i,a)=>a.findIndex(x=>x.id===r.id)===i);
     if(!pool.length){alert("Add or save some recipes first!");return;}
-    const byCategory={};pool.forEach(r=>{const cat=(r.category||"Dinner").toLowerCase();if(!byCategory[cat])byCategory[cat]=[];byCategory[cat].push(r);});
+    const byCategory={};pool.forEach(r=>{const cats=(r.category||"Dinner").split(",").map(c=>c.trim().toLowerCase());cats.forEach(cat=>{if(!byCategory[cat])byCategory[cat]=[];byCategory[cat].push(r);});});
     const pickFor=meal=>{
       const key=meal.toLowerCase();
       const matched=byCategory[key];
@@ -299,7 +302,11 @@ export default function Stewdium(){
   const RImg=({r})=>(<div className="recipe-card-img">{r.image_url?<img src={r.image_url} alt={r.title}/>:r.emoji||"🍽️"}</div>);
   const aName=r=>r.profiles?.name||"Unknown";
   const uAllergies=profile?.allergies||[];
-  const displayRecipes=useMemo(()=>{if(!allergenFilter||!uAllergies.length)return recipes;return recipes.filter(r=>{const ra=r.allergen_tags||[];return!ra.some(a=>uAllergies.includes(a));});},[recipes,allergenFilter,uAllergies]);
+  const displayRecipes=useMemo(()=>{let list=recipes;
+    if(catFilter&&catFilter!=="All"){list=list.filter(r=>{const cats=(r.category||"").split(",").map(c=>c.trim());return cats.includes(catFilter);});}
+    if(allergenFilter&&uAllergies.length){list=list.filter(r=>{const ra=r.allergen_tags||[];return!ra.some(a=>uAllergies.includes(a));});}
+    return list;
+  },[recipes,catFilter,allergenFilter,uAllergies]);
   const hasAllergen=r=>{if(!uAllergies.length)return false;return(r.allergen_tags||[]).some(a=>uAllergies.includes(a));};
 
   // ─── RENDER ───
@@ -368,7 +375,8 @@ export default function Stewdium(){
       <div className="form-group"><label className="form-label">Recipe Photo</label><ImageUpload value={newRecipe.imageFile||newRecipe.existingImageUrl} onChange={f=>setNewRecipe({...newRecipe,imageFile:f})} height={220} cropAspect={4/3}/></div>
       <div className="form-group"><label className="form-label">Title *</label><input className="form-input" placeholder="e.g., Grandma's Apple Pie" value={newRecipe.title} onChange={e=>setNewRecipe({...newRecipe,title:e.target.value})}/></div>
       <div className="form-group"><label className="form-label">Description</label><textarea className="form-input form-textarea" value={newRecipe.description} onChange={e=>setNewRecipe({...newRecipe,description:e.target.value})}/></div>
-      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div className="form-group" style={{flex:1,minWidth:120}}><label className="form-label">Category</label><select className="form-input" value={newRecipe.category} onChange={e=>setNewRecipe({...newRecipe,category:e.target.value})}>{CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}</select></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Servings</label><input className="form-input" type="number" min="1" value={newRecipe.servings} onChange={e=>setNewRecipe({...newRecipe,servings:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Prep Time</label><input className="form-input" placeholder="15 min" value={newRecipe.prepTime} onChange={e=>setNewRecipe({...newRecipe,prepTime:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Cook Time</label><input className="form-input" placeholder="30 min" value={newRecipe.cookTime} onChange={e=>setNewRecipe({...newRecipe,cookTime:e.target.value})}/></div></div>
+      <div className="form-group"><label className="form-label">Categories <span style={{fontWeight:400,color:"var(--gray-400)"}}>(select all that apply)</span></label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{CATEGORIES.filter(c=>c!=="All").map(c=><button key={c} className={`filter-chip ${(newRecipe.categories||[]).includes(c)?"active":""}`} onClick={()=>{const cur=newRecipe.categories||[];setNewRecipe({...newRecipe,categories:cur.includes(c)?cur.filter(x=>x!==c):[...cur,c]});}}>{c}</button>)}</div></div>
+      <div style={{display:"flex",gap:12,flexWrap:"wrap"}}><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Servings</label><input className="form-input" type="number" min="1" value={newRecipe.servings} onChange={e=>setNewRecipe({...newRecipe,servings:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Prep Time</label><input className="form-input" placeholder="15 min" value={newRecipe.prepTime} onChange={e=>setNewRecipe({...newRecipe,prepTime:e.target.value})}/></div><div className="form-group" style={{flex:1,minWidth:100}}><label className="form-label">Cook Time</label><input className="form-input" placeholder="30 min" value={newRecipe.cookTime} onChange={e=>setNewRecipe({...newRecipe,cookTime:e.target.value})}/></div></div>
       {!newRecipe.imageFile&&<div className="form-group"><label className="form-label">Emoji</label><input className="form-input" style={{width:80}} value={newRecipe.emoji} onChange={e=>setNewRecipe({...newRecipe,emoji:e.target.value})}/></div>}
       <div className="form-group"><label className="form-label">Diet Tags</label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{DIET_TAGS.map(t=><button key={t.id} className={`diet-tag-chip ${newRecipe.dietTags?.includes(t.id)?"active":""}`} onClick={()=>setNewRecipe({...newRecipe,dietTags:newRecipe.dietTags?.includes(t.id)?newRecipe.dietTags.filter(x=>x!==t.id):[...(newRecipe.dietTags||[]),t.id]})}>{t.label}</button>)}</div></div>
       <div className="form-group"><label className="form-label">Allergens <span style={{fontWeight:400,color:"var(--gray-400)"}}>(select any allergens in this recipe)</span></label><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{ALLERGEN_LIST.map(a=><button key={a.id} className={`allergy-chip ${newRecipe.allergenTags?.includes(a.id)?"active":""}`} onClick={()=>setNewRecipe({...newRecipe,allergenTags:newRecipe.allergenTags?.includes(a.id)?newRecipe.allergenTags.filter(x=>x!==a.id):[...(newRecipe.allergenTags||[]),a.id]})}>{a.icon} {a.label}</button>)}</div></div>
