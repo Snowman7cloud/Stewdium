@@ -49,7 +49,7 @@ function CropModal({file,aspect=1,onDone,onCancel}){
   const handleTouchMove=e=>{if(dragging&&e.touches.length===1){const t=e.touches[0];setPos({x:dragStart.current.px+(t.clientX-dragStart.current.x),y:dragStart.current.py+(t.clientY-dragStart.current.y)});}};
   const crop=()=>{const img=imgRef.current;
     // If image dimensions aren't loaded yet, just pass the original file through
-    if(!img||!nat){onDone(file instanceof File?file:null);return;}
+    if(!img||!nat){onDone(file);return;}
     try{
       const c=canvasRef.current;const outSize=512;c.width=outSize;c.height=Math.round(outSize/aspect);
       const ctx=c.getContext("2d");const d=getDisp();
@@ -57,11 +57,12 @@ function CropModal({file,aspect=1,onDone,onCancel}){
       const sx=Math.max(0,(-imgLeft/d.w)*nat.w);const sy=Math.max(0,(-imgTop/d.h)*nat.h);
       const sw=Math.min(nat.w-sx,(boxW/d.w)*nat.w);const sh=Math.min(nat.h-sy,(boxH/d.h)*nat.h);
       ctx.drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
-      c.toBlob(blob=>{
-        if(blob){onDone(new File([blob],"cropped.jpg",{type:"image/jpeg"}));}
-        else{onDone(file instanceof File?file:null);}
-      },"image/jpeg",.92);
-    }catch(e){console.error("Crop failed, using original:",e);onDone(file instanceof File?file:null);}};
+      // Use synchronous toDataURL instead of async toBlob — toBlob can silently never fire
+      const dataUrl=c.toDataURL("image/jpeg",0.92);
+      const bin=atob(dataUrl.split(",")[1]);const arr=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+      onDone(new File([arr],"cropped.jpg",{type:"image/jpeg"}));
+    }catch(e){console.error("Crop failed, using original:",e);onDone(file);}};
   const src=useMemo(()=>typeof file==="string"?file:URL.createObjectURL(file),[file]);
   return(<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onTouchEnd={()=>setDragging(false)}>
     <div style={{color:"#fff",fontWeight:700,fontSize:14,marginBottom:12}}>Drag to reposition, scroll to zoom</div>
