@@ -15,6 +15,8 @@ const CATEGORIES=["All","Breakfast","Lunch","Dinner","Baking","Dessert","Snack",
 const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const MEALS_L=["Breakfast","Lunch","Dinner"];
 function getWeekStart(){const d=new Date();d.setDate(d.getDate()-d.getDay()+1);return d.toISOString().split('T')[0];}
+function timeAgo(iso){const s=(Date.now()-new Date(iso).getTime())/1000;if(s<60)return"just now";if(s<3600)return`${Math.floor(s/60)}m ago`;if(s<86400)return`${Math.floor(s/3600)}h ago`;if(s<604800)return`${Math.floor(s/86400)}d ago`;return new Date(iso).toLocaleDateString();}
+const ACTIVITY_ICONS={user:"👋",recipe:"🍲",comment:"💬",blog:"📝",photo:"📸",like:"👍",follow:"➕"};
 
 // Auto-suggest diet tags from ingredients
 function suggestDietTags(ingredients){
@@ -89,6 +91,14 @@ function ImageUpload({value,onChange,height=200,label="Upload a photo",round=fal
   if(round)return(<div style={{display:"inline-block"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||1} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}<div onClick={()=>{if(!cropFile)ref.current?.click();}} style={{width:80,height:80,borderRadius:"50%",overflow:"hidden",background:value?"none":"linear-gradient(135deg,var(--pink-200),var(--sage-200))",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",border:"3px dashed var(--sage-300)"}}>{value?<img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span style={{fontSize:24}}>📷</span>}</div><input ref={ref} type="file" accept="image/*" onChange={e=>{e.target.files?.[0]&&hf(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/><div style={{fontSize:11,color:"var(--gray-400)",textAlign:"center",marginTop:4}}>{label}</div></div>);
   return(<div onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(e.dataTransfer?.files?.[0])hf(e.dataTransfer.files[0]);}} onClick={()=>{if(!cropFile)ref.current?.click();}} style={{height,borderRadius:"var(--radius)",overflow:"hidden",border:drag?"3px dashed var(--sage-400)":value?"none":"3px dashed var(--gray-300)",background:value?"none":"linear-gradient(135deg,var(--pink-50),var(--sage-50),var(--blue-50))",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>{cropFile&&<CropModal file={cropFile} aspect={cropAspect||4/3} onDone={onCropDone} onCancel={()=>setCropFile(null)}/>}{value?(<><img src={typeof value==="string"?value:URL.createObjectURL(value)} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/><div style={{position:"absolute",bottom:8,right:8,background:"rgba(0,0,0,.6)",color:"#fff",padding:"4px 10px",borderRadius:99,fontSize:12,fontWeight:700}}>Change</div></>):(<><span style={{fontSize:36,marginBottom:8}}>📸</span><span style={{fontWeight:700,fontSize:14,color:"var(--gray-500)"}}>{label}</span><span style={{fontSize:12,color:"var(--gray-400)",marginTop:2}}>Drag & drop or click</span></>)}<input ref={ref} type="file" accept="image/*" onChange={e=>{e.target.files?.[0]&&hf(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></div>);
 }
+function Stars({value=0,onChange,size=18}){
+  // Read-only when no onChange; clickable picker otherwise
+  return(<span style={{display:"inline-flex",gap:1,verticalAlign:"middle"}}>{[1,2,3,4,5].map(n=>(
+    <span key={n} onClick={onChange?()=>onChange(n===value?0:n):undefined}
+      style={{fontSize:size,lineHeight:1,cursor:onChange?"pointer":"default",color:n<=value?"#f59e0b":"var(--gray-300)",userSelect:"none"}}
+      title={onChange?`${n} star${n>1?"s":""}`:undefined}>★</span>
+  ))}</span>);
+}
 function Lightbox({src,onClose}){if(!src)return null;return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",cursor:"zoom-out",backdropFilter:"blur(8px)"}}><img src={src} alt="" style={{maxWidth:"90vw",maxHeight:"90vh",borderRadius:12}}/><button onClick={onClose} style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,.2)",border:"none",color:"#fff",width:40,height:40,borderRadius:"50%",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button></div>);}
 function NutritionPanel({nutrition}){if(!nutrition)return null;const ps=nutrition.perServing;const items=[{label:"Calories",val:ps.calories,unit:"kcal",color:"var(--pink-400)"},{label:"Protein",val:ps.protein,unit:"g",color:"var(--sage-500)"},{label:"Carbs",val:ps.carbs,unit:"g",color:"var(--blue-400)"},{label:"Fat",val:ps.fat,unit:"g",color:"var(--pink-300)"}];return(<div style={{margin:"24px 0",padding:20,background:"var(--white)",borderRadius:"var(--radius)",boxShadow:"var(--shadow-sm)"}}><div className="section-title" style={{borderColor:"var(--sage-200)"}}>🥗 Nutrition Per Serving</div><div style={{display:"flex",gap:16,flexWrap:"wrap"}}>{items.map(i=><div key={i.label} style={{flex:1,minWidth:80,textAlign:"center",padding:12,background:"var(--gray-50)",borderRadius:"var(--radius-sm)"}}><div style={{fontSize:22,fontWeight:800,color:i.color}}>{i.val}</div><div style={{fontSize:11,color:"var(--gray-400)",fontWeight:700,textTransform:"uppercase"}}>{i.unit}</div><div style={{fontSize:12,fontWeight:700,color:"var(--gray-600)",marginTop:2}}>{i.label}</div></div>)}</div>{nutrition.matched<nutrition.totalIngredients&&<div style={{fontSize:11,color:"var(--gray-400)",marginTop:8,textAlign:"center"}}>Based on {nutrition.coverage} matched ingredients</div>}</div>);}
 function AllergenBadges({allergens,userAllergies=[]}){if(!allergens?.length)return null;return(<div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:6}}>{allergens.map(a=>{const al=ALLERGEN_LIST.find(x=>x.id===a);if(!al)return null;const danger=userAllergies.includes(a);return<span key={a} style={{padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:700,background:danger?"#fef2f2":"var(--gray-100)",color:danger?"#ef4444":"var(--gray-500)",border:`1px solid ${danger?"#fecaca":"var(--gray-200)"}`}}>{al.icon} {al.label}</span>;})}</div>);}
@@ -132,7 +142,17 @@ const CSS=`@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Displa
 .like-btn-clickable{cursor:pointer}.like-btn-clickable:hover{text-decoration:underline}
 @media(max-width:640px){.msg-layout{grid-template-columns:1fr}.msg-sidebar{max-height:none}.msg-window{min-height:60vh}}
 @media print{.nav,.footer,.scale-bar,.recipe-actions,.back-btn,.btn,.like-btn,.allergen-warn,.comment{display:none!important}.main{padding:0}.recipe-detail{max-width:100%}}
-@media(max-width:640px){.nav-links{display:none}.recipe-grid{grid-template-columns:1fr}.profile-header{flex-direction:column;text-align:center}.planner-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.hero-title{font-size:30px}.recipe-title{font-size:26px}.scale-bar{flex-direction:column;align-items:flex-start}.footer-inner{flex-direction:column;gap:24px}}`;
+.nav-burger{display:none;background:none;border:none;font-size:24px;cursor:pointer;color:var(--sage-600);padding:4px 8px;line-height:1}
+.mobile-menu{position:fixed;top:64px;left:0;right:0;background:rgba(255,255,255,.98);backdrop-filter:blur(20px);border-bottom:1px solid var(--pink-100);box-shadow:var(--shadow-lg);z-index:99;padding:8px 16px 16px;display:flex;flex-direction:column}
+.mobile-menu .nav-link{text-align:left;padding:13px 16px;font-size:16px}
+.admin-table{width:100%;border-collapse:collapse;font-size:14px}
+.admin-table th{text-align:left;padding:10px 12px;border-bottom:2px solid var(--sage-200);font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);white-space:nowrap}
+.admin-table td{padding:10px 12px;border-bottom:1px solid var(--gray-100);vertical-align:middle}
+.admin-chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:800;background:var(--pink-100);color:var(--pink-500)}
+.activity-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--gray-100);font-size:14px;align-items:flex-start}
+.activity-icon{width:32px;height:32px;border-radius:50%;background:var(--sage-50);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.activity-when{font-size:12px;color:var(--gray-400);white-space:nowrap;margin-left:auto;padding-left:12px}
+@media(max-width:640px){.nav-links{display:none}.nav-burger{display:block}.recipe-grid{grid-template-columns:1fr}.profile-header{flex-direction:column;text-align:center}.planner-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}.hero-title{font-size:30px}.recipe-title{font-size:26px}.scale-bar{flex-direction:column;align-items:flex-start}.footer-inner{flex-direction:column;gap:24px}}`;
 
 export default function Stewdium(){
   const[page,setPage]=useState("home");const[user,setUser]=useState(null);const[profile,setProfile]=useState(null);
@@ -158,6 +178,12 @@ export default function Stewdium(){
   const[blogPosts,setBlogPosts]=useState([]);const[viewingBlog,setViewingBlog]=useState(null);const[editingBlog,setEditingBlog]=useState(null);
   const[editingCommentId,setEditingCommentId]=useState(null);const[editingCommentText,setEditingCommentText]=useState("");const[commentSearch,setCommentSearch]=useState("");
   const[likersModal,setLikersModal]=useState(null);
+  const[mobileNavOpen,setMobileNavOpen]=useState(false);
+  const[commentRating,setCommentRating]=useState(0);
+  const[privateNote,setPrivateNote]=useState("");const[privateNoteSaved,setPrivateNoteSaved]=useState(true);const[savingPrivateNote,setSavingPrivateNote]=useState(false);
+  const[blogComments,setBlogComments]=useState([]);const[blogCommentText,setBlogCommentText]=useState("");const[editingBlogCommentId,setEditingBlogCommentId]=useState(null);const[editingBlogCommentText,setEditingBlogCommentText]=useState("");
+  const[siteSettings,setSiteSettings]=useState({});
+  const[adminUsers,setAdminUsers]=useState([]);const[adminActivity,setAdminActivity]=useState([]);const[adminLoading,setAdminLoading]=useState(false);const[adminTab,setAdminTab]=useState("activity");const[settingsDraft,setSettingsDraft]=useState(null);const[settingsSaving,setSettingsSaving]=useState(false);
   const csvRef=useRef(null);const cookedRef=useRef(null);const filterMenuRef=useRef(null);
 
   // Auth
@@ -206,11 +232,11 @@ export default function Stewdium(){
   // Actions
   const toggleSave=async id=>{if(!user){setAuthModal("login");return;}if(savedIds.includes(id)){await db.unsaveRecipe(user.id,id);setSavedIds(p=>p.filter(x=>x!==id));}else{await db.saveRecipe(user.id,id);setSavedIds(p=>[...p,id]);}};
   const toggleLike=async id=>{if(!user){setAuthModal("login");return;}if(likedIds.includes(id)){await db.unlikeRecipe(user.id,id);setLikedIds(p=>p.filter(x=>x!==id));setRecipes(p=>p.map(r=>r.id===id?{...r,like_count:(r.like_count||1)-1}:r));}else{await db.likeRecipe(user.id,id);setLikedIds(p=>[...p,id]);setRecipes(p=>p.map(r=>r.id===id?{...r,like_count:(r.like_count||0)+1}:r));}};
-  const openRecipe=r=>{setViewing(r);setScaleValue(null);setScaleMode("servings");setCommentText("");setCommentSearch("");setEditingCommentId(null);setEditingCommentText("");setPage("recipe");};
-  const handleAddRecipe=()=>{if(!user){setAuthModal("login");return;}setNewRecipe({title:"",description:"",categories:["Dinner"],prepTime:"",cookTime:"",servings:4,ingredients:[{amount:"",unit:"",name:""}],steps:[""],isPublic:true,imageFile:null,emoji:"🍽️",dietTags:[],allergenTags:[]});setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");};
+  const openRecipe=r=>{setViewing(r);setScaleValue(null);setScaleMode("servings");setCommentText("");setCommentRating(0);setCommentSearch("");setEditingCommentId(null);setEditingCommentText("");setPage("recipe");};
+  const handleAddRecipe=()=>{if(!user){setAuthModal("login");return;}setNewRecipe({title:"",description:"",categories:["Dinner"],prepTime:"",cookTime:"",servings:4,ingredients:[{amount:"",unit:"",name:""}],steps:[""],isPublic:true,imageFile:null,emoji:"🍽️",dietTags:[],allergenTags:[],notes:""});setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");};
 
   const handleEditRecipe=r=>{
-    if(!user||user.id!==r.user_id)return;
+    if(!user||(user.id!==r.user_id&&!isAdmin))return;
     setNewRecipe({
       id:r.id,
       title:r.title||"",
@@ -227,12 +253,13 @@ export default function Stewdium(){
       emoji:r.emoji||"🍽️",
       dietTags:r.tags||[],
       allergenTags:r.allergen_tags||[],
+      notes:r.notes||"",
     });
     setIngPasteMode(false);setStepPasteMode(false);setPage("addRecipe");
   };
 
   const handleDeleteRecipe=async r=>{
-    if(!user||user.id!==r.user_id)return;
+    if(!user||(user.id!==r.user_id&&!isAdmin))return;
     if(!window.confirm(`Delete "${r.title}"? This cannot be undone.`))return;
     const{error}=await db.deleteRecipe(r.id);
     if(error){alert("Could not delete: "+error.message);return;}
@@ -253,7 +280,7 @@ export default function Stewdium(){
     const ings=newRecipe.ingredients.filter(i=>i.name).map(i=>({...i,amount:parseFrac(i.amount)}));
     const steps=newRecipe.steps.filter(s=>s.trim());
     const nutrition=calculateNutrition(ings,parseInt(newRecipe.servings)||4);
-    const payload={title:newRecipe.title,description:newRecipe.description,category:(newRecipe.categories||[]).join(","),prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:newRecipe.allergenTags||[],nutrition,tags:newRecipe.dietTags||[]};
+    const payload={title:newRecipe.title,description:newRecipe.description,category:(newRecipe.categories||[]).join(","),prep_time:newRecipe.prepTime,cook_time:newRecipe.cookTime,servings:parseInt(newRecipe.servings)||4,is_public:newRecipe.isPublic,image_url,emoji:newRecipe.emoji,ingredients:ings,steps,allergen_tags:newRecipe.allergenTags||[],nutrition,tags:newRecipe.dietTags||[],notes:newRecipe.notes||""};
     if(newRecipe.id){
       await db.updateRecipe(newRecipe.id,payload);
     }else{
@@ -264,7 +291,7 @@ export default function Stewdium(){
   };
 
   const uploadCookedPhoto=async f=>{if(!user||!viewing)return;const ext=f.name.split('.').pop();const path=`${user.id}/${viewing.id}_${Date.now()}.${ext}`;const{url}=await db.uploadImage('cooked-photos',path,f);if(url){const{data}=await db.addCookedPhoto(user.id,viewing.id,url);if(data)setCookedPhotos(p=>[data,...p]);}};
-  const submitComment=async()=>{if(!commentText.trim()||!user||!viewing)return;const{data}=await db.addComment(user.id,viewing.id,commentText.trim());if(data){setComments(p=>[...p,data]);setCommentText("");}};
+  const submitComment=async()=>{if(!commentText.trim()||!user||!viewing)return;const{data}=await db.addComment(user.id,viewing.id,commentText.trim(),commentRating||null);if(data){setComments(p=>[...p,data]);setCommentText("");setCommentRating(0);}};
   const printRecipe=()=>{if(!user){setAuthModal("login");return;}window.print();};
   const downloadRecipe=(r,scale)=>{if(!user){setAuthModal("login");return;}const es=scaleValue&&scaleMode==="servings"?scaleValue:Math.round(r.servings*scale);const lines=[`${r.title}\n${"=".repeat(r.title.length)}\n`,`By: ${r.profiles?.name||"Unknown"}`,`Prep: ${r.prep_time}  |  Cook: ${r.cook_time}  |  Servings: ${es}\n`];if(r.description)lines.push(`${r.description}\n`);lines.push(`INGREDIENTS\n${"-".repeat(30)}`);(r.ingredients||[]).forEach(i=>{const{amount,unit}=smartScale(i.amount,i.unit,scale);lines.push(`  ${fmtAmt(amount,unit)}  ${i.name}`);});lines.push(`\nINSTRUCTIONS\n${"-".repeat(30)}`);(r.steps||[]).forEach((s,i)=>lines.push(`  ${i+1}. ${s}`));lines.push(`\n---\nFrom Stewdium (stewdium.com)`);const blob=new Blob([lines.join("\n")],{type:"text/plain"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=`${r.title.replace(/[^a-zA-Z0-9 ]/g,"").replace(/ +/g,"_")}.txt`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);};
 
@@ -288,14 +315,37 @@ export default function Stewdium(){
   useEffect(()=>{if(!conversationPeer||!user)return;const iv=setInterval(async()=>{const{data}=await db.getMessages(user.id,conversationPeer.id);setMessages(data);await db.markMessagesRead(user.id,conversationPeer.id);refreshUnread();},5000);return()=>clearInterval(iv);},[conversationPeer,user,refreshUnread]);
   const sendMessageFn=async()=>{const t=messageText.trim();if(!t||!user||!conversationPeer)return;const{data,error}=await db.sendMessage(user.id,conversationPeer.id,t);if(error){alert("Could not send: "+error.message);return;}setMessages(p=>[...p,data]);setMessageText("");};
 
+  // ─── ADMIN ───
+  // Real admin flag from the database (profiles.is_admin, set for Ellie B.).
+  // The old check matched on display name, which anyone could copy.
+  const isAdmin=!!profile?.is_admin;
+  const loadAdminData=useCallback(async()=>{setAdminLoading(true);const[u,a]=await Promise.all([db.getAllUsersWithStats(),db.getRecentActivity()]);setAdminUsers(u.data||[]);setAdminActivity(a.data||[]);setAdminLoading(false);},[]);
+  useEffect(()=>{if(page==="admin"&&isAdmin)loadAdminData();},[page,isAdmin,loadAdminData]);
+  const saveSiteSettings=async()=>{if(!settingsDraft)return;setSettingsSaving(true);for(const[k,v]of Object.entries(settingsDraft)){if(v!==(siteSettings[k]||"")){const{error}=await db.setSiteSetting(k,v);if(error){alert("Could not save: "+error.message);setSettingsSaving(false);return;}}}setSiteSettings(p=>({...p,...settingsDraft}));setSettingsDraft(null);setSettingsSaving(false);};
+
+  // ─── SITE COPY (admin-editable, falls back to defaults) ───
+  const COPY_DEFAULTS={hero_title:"Welcome to Stewdium",hero_subtitle:"Discover recipes, build your collection, and plan your meals.",footer_description:"Your home for discovering, sharing, and organizing recipes.",blog_subtitle:"Stories and updates from Ellie B."};
+  useEffect(()=>{db.getSiteSettings().then(({data})=>setSiteSettings(data||{}));},[]);
+  const copyText=k=>siteSettings[k]||COPY_DEFAULTS[k]||"";
+
   // ─── BLOG ───
-  const isEllie=useMemo(()=>profile?.name?.trim().toLowerCase()==="ellie b."||profile?.name?.trim().toLowerCase()==="ellie b",[profile]);
+  const isEllie=isAdmin;
   const loadBlogPosts=useCallback(async()=>{const{data}=await db.getBlogPosts();setBlogPosts(data);},[]);
   useEffect(()=>{if(page==="blog")loadBlogPosts();},[page,loadBlogPosts]);
   const startNewBlogPost=()=>{if(!isEllie)return;setEditingBlog({title:"",body:"",coverFile:null,existingCoverUrl:""});setViewingBlog(null);};
-  const startEditBlogPost=p=>{if(!isEllie||p.author_id!==user.id)return;setEditingBlog({id:p.id,title:p.title,body:p.body,coverFile:null,existingCoverUrl:p.cover_image_url||""});setViewingBlog(null);};
+  const startEditBlogPost=p=>{if(!isAdmin)return;setEditingBlog({id:p.id,title:p.title,body:p.body,coverFile:null,existingCoverUrl:p.cover_image_url||""});setViewingBlog(null);};
   const saveBlogPost=async()=>{if(!editingBlog||!editingBlog.title.trim()||!editingBlog.body.trim()||!user)return;let cover_image_url=editingBlog.existingCoverUrl||null;if(editingBlog.coverFile){const ext=(editingBlog.coverFile.name.split('.').pop()||'jpg').toLowerCase();const path=`${user.id}/cover-${Date.now()}.${ext}`;const{url}=await db.uploadImage('blog-covers',path,editingBlog.coverFile);if(url)cover_image_url=url;}const payload={title:editingBlog.title.trim(),body:editingBlog.body,cover_image_url};if(editingBlog.id){const{error}=await db.updateBlogPost(editingBlog.id,payload);if(error){alert("Could not save: "+error.message);return;}}else{const{error}=await db.createBlogPost({author_id:user.id,...payload});if(error){alert("Could not publish: "+error.message);return;}}setEditingBlog(null);loadBlogPosts();};
-  const deleteBlogPostFn=async p=>{if(!isEllie||p.author_id!==user.id)return;if(!window.confirm(`Delete "${p.title}"?`))return;const{error}=await db.deleteBlogPost(p.id);if(error){alert("Could not delete: "+error.message);return;}setViewingBlog(null);loadBlogPosts();};
+  const deleteBlogPostFn=async p=>{if(!isAdmin)return;if(!window.confirm(`Delete "${p.title}"?`))return;const{error}=await db.deleteBlogPost(p.id);if(error){alert("Could not delete: "+error.message);return;}setViewingBlog(null);loadBlogPosts();};
+
+  // ─── BLOG COMMENTS ───
+  useEffect(()=>{if(viewingBlog){db.getBlogComments(viewingBlog.id).then(({data})=>setBlogComments(data));setBlogCommentText("");setEditingBlogCommentId(null);}else{setBlogComments([]);}},[viewingBlog]);
+  const submitBlogComment=async()=>{const t=blogCommentText.trim();if(!t||!user||!viewingBlog)return;const{data,error}=await db.addBlogComment(user.id,viewingBlog.id,t);if(error){alert("Could not post: "+error.message);return;}setBlogComments(p=>[...p,data]);setBlogCommentText("");};
+  const saveEditBlogComment=async()=>{const t=editingBlogCommentText.trim();if(!t||!editingBlogCommentId)return;const{data,error}=await db.updateBlogComment(editingBlogCommentId,t);if(error){alert("Could not save: "+error.message);return;}setBlogComments(p=>p.map(c=>c.id===editingBlogCommentId?{...c,...data}:c));setEditingBlogCommentId(null);setEditingBlogCommentText("");};
+  const deleteBlogCommentFn=async c=>{if(!window.confirm("Delete this comment?"))return;const{error}=await db.deleteBlogComment(c.id);if(error){alert("Could not delete: "+error.message);return;}setBlogComments(p=>p.filter(x=>x.id!==c.id));};
+
+  // ─── PRIVATE NOTES (notes to self on your own recipe) ───
+  useEffect(()=>{if(viewing&&user&&viewing.user_id===user.id){db.getPrivateNote(user.id,viewing.id).then(({data})=>{setPrivateNote(data?.text||"");setPrivateNoteSaved(true);});}else{setPrivateNote("");setPrivateNoteSaved(true);}},[viewing,user]);
+  const savePrivateNoteFn=async()=>{if(!user||!viewing||savingPrivateNote)return;setSavingPrivateNote(true);const{error}=await db.savePrivateNote(user.id,viewing.id,privateNote);setSavingPrivateNote(false);if(error){alert("Could not save note: "+error.message);return;}setPrivateNoteSaved(true);};
 
   // ─── COMMENT EDIT/DELETE ───
   const startEditComment=c=>{setEditingCommentId(c.id);setEditingCommentText(c.text);};
@@ -357,7 +407,7 @@ export default function Stewdium(){
   const hasAllergen=r=>{if(!uAllergies.length)return false;return(r.allergen_tags||[]).some(a=>uAllergies.includes(a));};
 
   // ─── RENDER ───
-  return(<><style>{CSS}</style><div className="app"><Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>
+  return(<><style dangerouslySetInnerHTML={{__html:CSS}}/><div className="app"><Lightbox src={lightbox} onClose={()=>setLightbox(null)}/>
   <nav className="nav"><div className="nav-inner">
     <div className="nav-logo" onClick={()=>{setPage("home");setViewing(null);}}><img src="/logo.png" alt="Stewdium" style={{height:36,width:"auto"}}/><span className="nav-logo-text"><span style={{color:"var(--pink-400)"}}>stew</span>dium</span></div>
     <div className="nav-links">
@@ -367,17 +417,26 @@ export default function Stewdium(){
       <button className={`nav-link ${page==="friends"?"active":""}`} onClick={()=>{if(!user)setAuthModal("login");else setPage("friends");}}>Friends</button>
       <button className={`nav-link ${page==="messages"?"active":""}`} onClick={()=>{if(!user)setAuthModal("login");else{setConversationPeer(null);setPage("messages");}}} style={{position:"relative"}}>Messages{totalUnread>0&&<span className="unread-badge">{totalUnread>99?"99+":totalUnread}</span>}</button>
       <button className={`nav-link ${page==="blog"?"active":""}`} onClick={()=>{setViewingBlog(null);setEditingBlog(null);setPage("blog");}}>Blog</button>
+      {isAdmin&&<button className={`nav-link ${page==="admin"?"active":""}`} onClick={()=>setPage("admin")}>Dashboard</button>}
     </div>
-    <div className="nav-user">{user?<div className="nav-avatar" onClick={()=>setPage("profile")} title={profile?.name}>{profile?.avatar_url?<img src={profile.avatar_url} alt=""/>:(profile?.name||"U")[0].toUpperCase()}</div>:<button className="btn btn-primary btn-sm" onClick={()=>setAuthModal("login")}>Sign In</button>}</div>
+    <div className="nav-user">
+      <button className="nav-burger" onClick={()=>setMobileNavOpen(o=>!o)} aria-label="Menu">{mobileNavOpen?"✕":"☰"}</button>
+      {user?<div className="nav-avatar" onClick={()=>{setMobileNavOpen(false);setPage("profile");}} title={profile?.name}>{profile?.avatar_url?<img src={profile.avatar_url} alt=""/>:(profile?.name||"U")[0].toUpperCase()}</div>:<button className="btn btn-primary btn-sm" onClick={()=>setAuthModal("login")}>Sign In</button>}
+    </div>
   </div></nav>
+  {/* MOBILE MENU (nav links are hidden on small screens; this is how phones reach Messages etc.) */}
+  {mobileNavOpen&&<div className="mobile-menu">
+    {[["home","Home"],["board","My Board"],["planner","Meal Plan"],["friends","Friends"],["messages","Messages"],["blog","Blog"],...(isAdmin?[["admin","Dashboard"]]:[])].map(([k,label])=>
+      <button key={k} className={`nav-link ${page===k?"active":""}`} onClick={()=>{setMobileNavOpen(false);if(k!=="home"&&k!=="blog"&&!user){setAuthModal("login");return;}if(k==="messages")setConversationPeer(null);if(k==="blog"){setViewingBlog(null);setEditingBlog(null);}setPage(k);}}>{label}{k==="messages"&&totalUnread>0&&<span className="unread-badge">{totalUnread>99?"99+":totalUnread}</span>}</button>)}
+  </div>}
   <div className="main">
 
   {/* HOME */}
-  {page==="home"&&<><div className="hero-section"><div className="hero-title">Welcome to <span>Stewdium</span></div><div className="hero-sub">Discover recipes, build your collection, and plan your meals.</div></div>
+  {page==="home"&&<><div className="hero-section"><div className="hero-title">{copyText("hero_title").includes("Stewdium")?<>{copyText("hero_title").split("Stewdium")[0]}<span>Stewdium</span>{copyText("hero_title").split("Stewdium")[1]}</>:copyText("hero_title")}</div><div className="hero-sub">{copyText("hero_subtitle")}</div></div>
     <div className="search-bar"><input className="search-input" placeholder="Search recipes..." value={search} onChange={e=>setSearch(e.target.value)}/><select className="form-input" style={{width:"auto",borderRadius:99,padding:"10px 14px",fontWeight:600,fontSize:13}} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="newest">Newest</option><option value="popular">Most Popular</option></select><button className="btn btn-primary" onClick={handleAddRecipe}>+ Add Recipe</button></div>
     <div style={{display:"flex",gap:12,marginBottom:24,flexWrap:"wrap",alignItems:"center"}}>
       <div className="filter-dropdown" ref={filterMenuRef}>
-        <button className="btn btn-secondary btn-sm" onClick={()=>setFilterMenuOpen(o=>!o)}>🧰 Filter: <strong style={{color:"var(--pink-500)",marginLeft:4}}>{catFilter}</strong> <span style={{marginLeft:4,fontSize:10}}>▾</span></button>
+        <button className="btn btn-secondary btn-sm" onClick={()=>setFilterMenuOpen(o=>!o)}>Filter: <strong style={{color:"var(--pink-500)",marginLeft:4}}>{catFilter}</strong> <span style={{marginLeft:4,fontSize:10}}>▾</span></button>
         {filterMenuOpen&&<div className="filter-menu">{CATEGORIES.map(c=><button key={c} className={`filter-menu-item ${catFilter===c?"active":""}`} onClick={()=>{setCatFilter(c);setFilterMenuOpen(false);}}>{catFilter===c?"✓ ":"   "}{c}</button>)}</div>}
       </div>
       {user&&uAllergies.length>0&&<div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}><div className={`toggle-track ${allergenFilter?"on":""}`} onClick={()=>setAllergenFilter(!allergenFilter)}><div className="toggle-knob"/></div><span style={{fontSize:13,fontWeight:600,color:"var(--gray-600)"}}>Hide allergens</span></div>}
@@ -391,7 +450,7 @@ export default function Stewdium(){
     <button className="back-btn" onClick={()=>setPage("home")}>← Back</button>
     <div className="recipe-hero">{r.image_url?<img src={r.image_url} alt={r.title}/>:r.emoji||"🍽️"}</div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}><div><div className="recipe-title">{r.title}</div><div className="recipe-card-author" style={{marginBottom:8,cursor:"pointer"}} onClick={()=>viewProfile(r.user_id)}>by {aName(r)}</div></div>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{user&&<><button className="btn btn-pink btn-sm" onClick={()=>cookedRef.current?.click()}>📸 I cooked this!</button><input ref={cookedRef} type="file" accept="image/*" onChange={e=>{if(e.target.files?.[0])uploadCookedPhoto(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></>}<button className={`like-btn ${likedIds.includes(r.id)?"liked":""}`} onClick={()=>toggleLike(r.id)}>👍 {r.like_count||0}</button>{(r.like_count||0)>0&&<button className="btn btn-secondary btn-sm" onClick={()=>openLikersModal(r.id)} title="See who liked this">👥 Who liked</button>}<button className="btn btn-secondary btn-sm" onClick={()=>toggleSave(r.id)}>{savedIds.includes(r.id)?"❤️ Saved":"🤍 Save"}</button>{user&&user.id===r.user_id&&<><button className="btn btn-secondary btn-sm" onClick={()=>handleEditRecipe(r)}>✏️ Edit</button><button className="btn btn-secondary btn-sm" style={{color:"#dc2626",borderColor:"#fecaca"}} onClick={()=>handleDeleteRecipe(r)}>🗑️ Delete</button></>}</div></div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>{user&&<><button className="btn btn-pink btn-sm" onClick={()=>cookedRef.current?.click()}>📸 I cooked this!</button><input ref={cookedRef} type="file" accept="image/*" onChange={e=>{if(e.target.files?.[0])uploadCookedPhoto(e.target.files[0]);e.target.value="";}} style={{display:"none"}}/></>}<button className={`like-btn ${likedIds.includes(r.id)?"liked":""}`} onClick={()=>toggleLike(r.id)}>👍 {r.like_count||0}</button>{(r.like_count||0)>0&&<button className="btn btn-secondary btn-sm" onClick={()=>openLikersModal(r.id)} title="See who liked this">👥 Who liked</button>}<button className="btn btn-secondary btn-sm" onClick={()=>toggleSave(r.id)}>{savedIds.includes(r.id)?"❤️ Saved":"🤍 Save"}</button>{user&&(user.id===r.user_id||isAdmin)&&<><button className="btn btn-secondary btn-sm" onClick={()=>handleEditRecipe(r)}>✏️ Edit</button><button className="btn btn-secondary btn-sm" style={{color:"#dc2626",borderColor:"#fecaca"}} onClick={()=>handleDeleteRecipe(r)}>🗑️ Delete</button></>}</div></div>
     {user&&hasAllergen(r)&&<div className="allergen-warn">⚠️ This recipe contains ingredients you're allergic to</div>}
     <AllergenBadges allergens={allergens} userAllergies={uAllergies}/>
     <div className="recipe-desc">{r.description}</div>
@@ -403,12 +462,25 @@ export default function Stewdium(){
     <ul className="ingredient-list">{(r.ingredients||[]).map((ing,i)=>{const{amount,unit}=smartScale(ing.amount,ing.unit,scale);return<li key={i} className="ingredient-item"><span className="ingredient-amount">{fmtAmt(amount,unit)}</span><span className="ingredient-name">{ing.name}</span></li>;})}</ul>
     <div className="section-title">Instructions</div>
     <ol className="step-list">{(r.steps||[]).map((s,i)=><li key={i} className="step-item">{s}</li>)}</ol>
+    {/* PUBLIC NOTES (written by the recipe author) */}
+    {(r.notes||"").trim()&&<><div className="section-title">📝 Notes</div><div style={{whiteSpace:"pre-wrap",fontSize:15,lineHeight:1.6,color:"var(--gray-600)",marginBottom:32,background:"var(--sage-50)",border:"2px solid var(--sage-100)",borderRadius:"var(--radius-sm)",padding:"14px 18px"}}>{r.notes}</div></>}
+    {/* PRIVATE NOTES TO SELF (only the recipe author sees this) */}
+    {user&&user.id===r.user_id&&<div style={{marginBottom:32}}>
+      <div className="section-title" style={{borderColor:"var(--blue-100)"}}>🔒 Notes to Self</div>
+      <div style={{fontSize:12,color:"var(--gray-400)",marginBottom:8,fontWeight:600}}>Only you can see this. Tweaks, improvements, ideas for next time.</div>
+      <textarea className="form-input form-textarea" style={{minHeight:90}} placeholder="e.g. Try 25 min next time, a little less salt..." value={privateNote} onChange={e=>{setPrivateNote(e.target.value);setPrivateNoteSaved(false);}}/>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8}}><button className="btn btn-primary btn-sm" onClick={savePrivateNoteFn} disabled={privateNoteSaved||savingPrivateNote}>{savingPrivateNote?"Saving...":privateNoteSaved?"Saved":"Save Note"}</button>{!privateNoteSaved&&<span style={{fontSize:12,color:"var(--gray-400)"}}>Unsaved changes</span>}</div>
+    </div>}
     <div className="recipe-actions"><button className="btn btn-secondary btn-sm" onClick={printRecipe}>🖨️ Print</button><button className="btn btn-secondary btn-sm" onClick={()=>downloadRecipe(r,scale)}>⬇️ Download</button>{!user&&<span style={{fontSize:12,color:"var(--gray-400)"}}>Sign in to print/download</span>}</div>
     {/* COMMENTS */}
-    <div style={{marginTop:32}}><div className="section-title" style={{borderColor:"var(--sage-200)"}}>💬 Comments ({comments.length})</div>
+    <div style={{marginTop:32}}>{(()=>{const rated=comments.filter(c=>c.rating);const avg=rated.length?rated.reduce((s,c)=>s+c.rating,0)/rated.length:0;
+      return<div className="section-title" style={{borderColor:"var(--sage-200)",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>💬 Comments ({comments.length}){rated.length>0&&<span style={{fontSize:14,fontFamily:"var(--font-body)",fontWeight:700,color:"var(--gray-500)",display:"inline-flex",alignItems:"center",gap:4}}><Stars value={Math.round(avg)} size={15}/>{avg.toFixed(1)} ({rated.length} rating{rated.length>1?"s":""})</span>}</div>;})()}
       {comments.length>0&&<input className="form-input" style={{borderRadius:99,marginBottom:12}} placeholder="🔍 Search comments..." value={commentSearch} onChange={e=>setCommentSearch(e.target.value)}/>}
-      {(()=>{const q=commentSearch.trim().toLowerCase();const filtered=q?comments.filter(c=>(c.text||"").toLowerCase().includes(q)||(c.profiles?.name||"").toLowerCase().includes(q)):comments;if(comments.length>0&&filtered.length===0)return<div style={{textAlign:"center",padding:"16px",color:"var(--gray-400)",fontSize:13}}>No comments match "{commentSearch}"</div>;if(comments.length===0)return<div style={{textAlign:"center",padding:"24px 16px",color:"var(--gray-400)",background:"var(--gray-50)",borderRadius:"var(--radius-sm)"}}><div style={{fontSize:32,marginBottom:8}}>💬</div><div style={{fontWeight:600,fontSize:14}}>Be the first to comment!</div></div>;return filtered.map(c=>{const isAuthor=user&&c.user_id===user.id;const isOwner=user&&r.user_id===user.id;const canDelete=isAuthor||isOwner;return<div key={c.id} className="comment"><div className="comment-avatar">{c.profiles?.avatar_url?<img src={c.profiles.avatar_url} alt=""/>:(c.profiles?.name||"?")[0].toUpperCase()}</div><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><span className="comment-name">{c.profiles?.name}</span><span className="comment-date">{new Date(c.created_at).toLocaleDateString()}</span>{c.updated_at&&<span className="comment-date" style={{fontStyle:"italic"}}>(edited)</span>}<div style={{marginLeft:"auto",display:"flex",gap:2}}>{isAuthor&&editingCommentId!==c.id&&<button className="comment-action-btn" title="Edit" onClick={()=>startEditComment(c)}>✏️</button>}{canDelete&&editingCommentId!==c.id&&<button className="comment-action-btn del" title="Delete" onClick={()=>deleteCommentFn(c)}>🗑️</button>}</div></div>{editingCommentId===c.id?<div style={{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}}><textarea className="form-input form-textarea" style={{flex:1,minWidth:200,minHeight:60}} value={editingCommentText} onChange={e=>setEditingCommentText(e.target.value)} autoFocus/><div style={{display:"flex",gap:6,alignItems:"flex-start"}}><button className="btn btn-primary btn-sm" onClick={saveEditComment} disabled={!editingCommentText.trim()}>Save</button><button className="btn btn-secondary btn-sm" onClick={cancelEditComment}>Cancel</button></div></div>:<div className="comment-text">{c.text}</div>}</div></div>;});})()}
-      {user?<div style={{display:"flex",gap:8,marginTop:16}}><input className="form-input" style={{flex:1,borderRadius:99}} placeholder="Add a comment..." value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitComment();}}/><button className="btn btn-primary btn-sm" onClick={submitComment}>Post</button></div>:<div style={{textAlign:"center",padding:16,color:"var(--gray-400)",fontSize:13}}>Sign in to comment</div>}
+      {(()=>{const q=commentSearch.trim().toLowerCase();const filtered=q?comments.filter(c=>(c.text||"").toLowerCase().includes(q)||(c.profiles?.name||"").toLowerCase().includes(q)):comments;if(comments.length>0&&filtered.length===0)return<div style={{textAlign:"center",padding:"16px",color:"var(--gray-400)",fontSize:13}}>No comments match "{commentSearch}"</div>;if(comments.length===0)return<div style={{textAlign:"center",padding:"24px 16px",color:"var(--gray-400)",background:"var(--gray-50)",borderRadius:"var(--radius-sm)"}}><div style={{fontSize:32,marginBottom:8}}>💬</div><div style={{fontWeight:600,fontSize:14}}>Be the first to comment!</div></div>;return filtered.map(c=>{const isAuthor=user&&c.user_id===user.id;const isOwner=user&&r.user_id===user.id;const canDelete=isAuthor||isOwner||isAdmin;return<div key={c.id} className="comment"><div className="comment-avatar">{c.profiles?.avatar_url?<img src={c.profiles.avatar_url} alt=""/>:(c.profiles?.name||"?")[0].toUpperCase()}</div><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><span className="comment-name">{c.profiles?.name}</span>{c.rating?<Stars value={c.rating} size={13}/>:null}<span className="comment-date">{new Date(c.created_at).toLocaleDateString()}</span>{c.updated_at&&<span className="comment-date" style={{fontStyle:"italic"}}>(edited)</span>}<div style={{marginLeft:"auto",display:"flex",gap:2}}>{isAuthor&&editingCommentId!==c.id&&<button className="comment-action-btn" title="Edit" onClick={()=>startEditComment(c)}>✏️</button>}{canDelete&&editingCommentId!==c.id&&<button className="comment-action-btn del" title="Delete" onClick={()=>deleteCommentFn(c)}>🗑️</button>}</div></div>{editingCommentId===c.id?<div style={{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}}><textarea className="form-input form-textarea" style={{flex:1,minWidth:200,minHeight:60}} value={editingCommentText} onChange={e=>setEditingCommentText(e.target.value)} autoFocus/><div style={{display:"flex",gap:6,alignItems:"flex-start"}}><button className="btn btn-primary btn-sm" onClick={saveEditComment} disabled={!editingCommentText.trim()}>Save</button><button className="btn btn-secondary btn-sm" onClick={cancelEditComment}>Cancel</button></div></div>:<div className="comment-text">{c.text}</div>}</div></div>;});})()}
+      {user?<div style={{marginTop:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><span style={{fontSize:13,fontWeight:700,color:"var(--gray-500)"}}>Your rating:</span><Stars value={commentRating} onChange={setCommentRating} size={20}/><span style={{fontSize:12,color:"var(--gray-400)"}}>{commentRating?`${commentRating}/5`:"(optional)"}</span></div>
+        <div style={{display:"flex",gap:8}}><input className="form-input" style={{flex:1,borderRadius:99}} placeholder="Add a comment..." value={commentText} onChange={e=>setCommentText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitComment();}}/><button className="btn btn-primary btn-sm" onClick={submitComment}>Post</button></div>
+      </div>:<div style={{textAlign:"center",padding:16,color:"var(--gray-400)",fontSize:13}}>Sign in to comment</div>}
     </div>
     {/* COOKED PHOTOS */}
     <div style={{marginTop:32}}><div className="section-title" style={{borderColor:"var(--sage-200)"}}>📸 Community Photos ({cookedPhotos.length})</div>
@@ -445,6 +517,7 @@ export default function Stewdium(){
         <div style={{display:"flex",gap:8,marginBottom:12}}><button className={`btn btn-sm ${!stepPasteMode?"btn-primary":"btn-secondary"}`} onClick={()=>setStepPasteMode(false)}>Manual</button><button className={`btn btn-sm ${stepPasteMode?"btn-primary":"btn-secondary"}`} onClick={()=>setStepPasteMode(true)}>Paste Steps</button></div>
         {stepPasteMode?<><textarea className="form-input form-textarea" style={{minHeight:160,fontFamily:"monospace",fontSize:13}} placeholder={"Paste steps, one per line:\n\n1. Preheat oven to 375°F\n2. Mix dry ingredients\n3. Add wet ingredients"} value={stepPasteText} onChange={e=>setStepPasteText(e.target.value)}/><button className="btn btn-primary btn-sm" style={{marginTop:8}} onClick={()=>{const parsed=parseStepsBlock(stepPasteText);if(!parsed.length){alert("Could not parse. Put each step on its own line.");return;}const existing=newRecipe.steps.filter(s=>s.trim());setNewRecipe({...newRecipe,steps:[...existing,...parsed]});setStepPasteMode(false);setStepPasteText("");}}>Parse & Add ({parseStepsBlock(stepPasteText).length} steps)</button></>
         :<>{newRecipe.steps.map((s,i)=><div key={i} style={{display:"flex",gap:8,marginBottom:8,alignItems:"center"}}><span style={{fontWeight:800,color:"var(--pink-300)",fontSize:14,minWidth:24}}>{i+1}.</span><input className="form-input" placeholder={`Step ${i+1}...`} value={s} onChange={e=>{const n=[...newRecipe.steps];n[i]=e.target.value;setNewRecipe({...newRecipe,steps:n});}}/>{newRecipe.steps.length>1&&<button style={{border:"none",background:"none",cursor:"pointer",color:"var(--gray-400)",fontSize:18}} onClick={()=>setNewRecipe({...newRecipe,steps:newRecipe.steps.filter((_,j)=>j!==i)})}>✕</button>}</div>)}<button className="btn btn-secondary btn-sm" onClick={()=>setNewRecipe({...newRecipe,steps:[...newRecipe.steps,""]})}>+ Step</button></>}</div>
+      <div className="form-group"><label className="form-label">Notes <span style={{fontWeight:400,color:"var(--gray-400)"}}>(optional, shown publicly under the instructions)</span></label><textarea className="form-input form-textarea" placeholder="Serving suggestions, substitutions, where the recipe came from..." value={newRecipe.notes||""} onChange={e=>setNewRecipe({...newRecipe,notes:e.target.value})}/></div>
       <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8}}><div className={`toggle-track ${newRecipe.isPublic?"on":""}`} onClick={()=>setNewRecipe({...newRecipe,isPublic:!newRecipe.isPublic})}><div className="toggle-knob"/></div><span style={{fontWeight:600,fontSize:14,color:"var(--gray-600)"}}>{newRecipe.isPublic?"🌎 Public":"🔒 Private"}</span></div>
       <div style={{marginTop:24,display:"flex",gap:12}}><button className="btn btn-primary" disabled={saving} onClick={saveNewRecipe}>{saving?"Saving...":"Save Recipe"}</button><button className="btn btn-secondary" onClick={()=>{setNewRecipe(null);setPage("board");}}>Cancel</button></div>
     </div></div>}
@@ -485,7 +558,7 @@ export default function Stewdium(){
       </div>
       <div className="msg-window">
         {conversationPeer?<><div className="msg-header"><div className="msg-convo-avatar">{conversationPeer.avatar_url?<img src={conversationPeer.avatar_url} alt=""/>:(conversationPeer.name||"?")[0].toUpperCase()}</div><div style={{fontWeight:700,fontSize:15}}>{conversationPeer.name}</div></div>
-          <div className="msg-list">{messages.length===0?<div style={{textAlign:"center",padding:"40px 16px",color:"var(--gray-400)",fontSize:13}}><div style={{fontSize:32,marginBottom:6}}>👋</div>Say hi to {conversationPeer.name}!</div>:messages.map(m=><div key={m.id} style={{display:"flex",flexDirection:"column",alignItems:m.sender_id===user.id?"flex-end":"flex-start"}}><div className={`msg-bubble ${m.sender_id===user.id?"mine":"theirs"}`}>{m.text}</div><div className="msg-meta">{new Date(m.created_at).toLocaleString([],{hour:"2-digit",minute:"2-digit"})}</div></div>)}</div>
+          <div className="msg-list">{messages.length===0?<div style={{textAlign:"center",padding:"40px 16px",color:"var(--gray-400)",fontSize:13}}><div style={{fontSize:32,marginBottom:6}}>👋</div>Say hi to {conversationPeer.name}!</div>:messages.map(m=><div key={m.id} style={{display:"flex",flexDirection:"column",alignItems:m.sender_id===user.id?"flex-end":"flex-start"}}><div className={`msg-bubble ${m.sender_id===user.id?"mine":"theirs"}`}>{m.text}</div><div className="msg-meta">{new Date(m.created_at).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</div></div>)}</div>
           <div className="msg-input-row"><input className="msg-input" placeholder={`Message ${conversationPeer.name}...`} value={messageText} onChange={e=>setMessageText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessageFn();}}}/><button className="btn btn-primary" onClick={sendMessageFn} disabled={!messageText.trim()}>Send</button></div>
         </>:<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--gray-400)",fontSize:14,padding:20,textAlign:"center"}}><div><div style={{fontSize:40,marginBottom:8}}>💌</div>Select a conversation to start chatting</div></div>}
       </div>
@@ -504,10 +577,47 @@ export default function Stewdium(){
     {viewingBlog.cover_image_url?<div className="blog-post-hero"><img src={viewingBlog.cover_image_url} alt=""/></div>:null}
     <div className="blog-post-title">{viewingBlog.title}</div>
     <div className="blog-post-meta">By {viewingBlog.profiles?.name||"Unknown"} · {new Date(viewingBlog.created_at).toLocaleDateString()}{viewingBlog.updated_at?" · edited":""}</div>
-    {isEllie&&viewingBlog.author_id===user?.id&&<div style={{display:"flex",gap:8,marginBottom:16}}><button className="btn btn-secondary btn-sm" onClick={()=>startEditBlogPost(viewingBlog)}>✏️ Edit</button><button className="btn btn-secondary btn-sm" style={{color:"#dc2626",borderColor:"#fecaca"}} onClick={()=>deleteBlogPostFn(viewingBlog)}>🗑️ Delete</button></div>}
-    <div className="blog-post-body">{viewingBlog.body}</div></div>
-  :<><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:12,marginBottom:24}}><div><div className="page-title" style={{marginBottom:0}}>The Stewdium Blog</div><div style={{color:"var(--gray-400)",fontSize:14}}>Stories and updates from Ellie B.</div></div>{isEllie&&<button className="btn btn-primary" onClick={startNewBlogPost}>✏️ New Blog Post</button>}</div>
+    {isAdmin&&<div style={{display:"flex",gap:8,marginBottom:16}}><button className="btn btn-secondary btn-sm" onClick={()=>startEditBlogPost(viewingBlog)}>✏️ Edit</button><button className="btn btn-secondary btn-sm" style={{color:"#dc2626",borderColor:"#fecaca"}} onClick={()=>deleteBlogPostFn(viewingBlog)}>🗑️ Delete</button></div>}
+    <div className="blog-post-body">{viewingBlog.body}</div>
+    {/* BLOG COMMENTS */}
+    <div style={{marginTop:40}}><div className="section-title" style={{borderColor:"var(--sage-200)"}}>💬 Comments ({blogComments.length})</div>
+      {blogComments.length===0?<div style={{textAlign:"center",padding:"24px 16px",color:"var(--gray-400)",background:"var(--gray-50)",borderRadius:"var(--radius-sm)"}}><div style={{fontSize:32,marginBottom:8}}>💬</div><div style={{fontWeight:600,fontSize:14}}>Be the first to comment!</div></div>
+      :blogComments.map(c=>{const isAuthor=user&&c.user_id===user.id;const canDelete=isAuthor||isAdmin;return<div key={c.id} className="comment"><div className="comment-avatar">{c.profiles?.avatar_url?<img src={c.profiles.avatar_url} alt=""/>:(c.profiles?.name||"?")[0].toUpperCase()}</div><div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:4}}><span className="comment-name">{c.profiles?.name}</span><span className="comment-date">{new Date(c.created_at).toLocaleDateString()}</span>{c.updated_at&&<span className="comment-date" style={{fontStyle:"italic"}}>(edited)</span>}<div style={{marginLeft:"auto",display:"flex",gap:2}}>{isAuthor&&editingBlogCommentId!==c.id&&<button className="comment-action-btn" title="Edit" onClick={()=>{setEditingBlogCommentId(c.id);setEditingBlogCommentText(c.text);}}>✏️</button>}{canDelete&&editingBlogCommentId!==c.id&&<button className="comment-action-btn del" title="Delete" onClick={()=>deleteBlogCommentFn(c)}>🗑️</button>}</div></div>{editingBlogCommentId===c.id?<div style={{marginTop:6,display:"flex",gap:6,flexWrap:"wrap"}}><textarea className="form-input form-textarea" style={{flex:1,minWidth:200,minHeight:60}} value={editingBlogCommentText} onChange={e=>setEditingBlogCommentText(e.target.value)} autoFocus/><div style={{display:"flex",gap:6,alignItems:"flex-start"}}><button className="btn btn-primary btn-sm" onClick={saveEditBlogComment} disabled={!editingBlogCommentText.trim()}>Save</button><button className="btn btn-secondary btn-sm" onClick={()=>{setEditingBlogCommentId(null);setEditingBlogCommentText("");}}>Cancel</button></div></div>:<div className="comment-text">{c.text}</div>}</div></div>;})}
+      {user?<div style={{display:"flex",gap:8,marginTop:16}}><input className="form-input" style={{flex:1,borderRadius:99}} placeholder="Add a comment..." value={blogCommentText} onChange={e=>setBlogCommentText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")submitBlogComment();}}/><button className="btn btn-primary btn-sm" onClick={submitBlogComment} disabled={!blogCommentText.trim()}>Post</button></div>:<div style={{textAlign:"center",padding:16,color:"var(--gray-400)",fontSize:13}}>Sign in to comment</div>}
+    </div></div>
+  :<><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",flexWrap:"wrap",gap:12,marginBottom:24}}><div><div className="page-title" style={{marginBottom:0}}>The Stewdium Blog</div><div style={{color:"var(--gray-400)",fontSize:14}}>{copyText("blog_subtitle")}</div></div>{isEllie&&<button className="btn btn-primary" onClick={startNewBlogPost}>✏️ New Blog Post</button>}</div>
     {blogPosts.length===0?<div className="empty-state"><div className="empty-state-icon">📝</div><div className="empty-state-text">No blog posts yet</div>{isEllie&&<div style={{fontSize:13,marginTop:4}}>Be the first to write one!</div>}</div>:<div className="blog-grid">{blogPosts.map(p=><div key={p.id} className="blog-card" onClick={()=>setViewingBlog(p)}><div className="blog-cover">{p.cover_image_url?<img src={p.cover_image_url} alt=""/>:"📝"}</div><div className="blog-body"><div className="blog-title">{p.title}</div><div className="blog-meta">By {p.profiles?.name||"Unknown"} · {new Date(p.created_at).toLocaleDateString()}</div><div style={{fontSize:13,color:"var(--gray-500)",lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{p.body}</div></div></div>)}</div>}</>}</>}
+
+  {/* ADMIN DASHBOARD */}
+  {page==="admin"&&(isAdmin?<>
+    <div className="page-title">Admin Dashboard</div>
+    <div className="page-subtitle">Everything happening on Stewdium, in one place.</div>
+    <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:24}}>
+      {[["👥 Users",adminUsers.length],["🍲 Recipes",recipes.length],["📝 Blog Posts",blogPosts.length]].map(([label,n])=><div key={label} className="card-static" style={{padding:"16px 24px",minWidth:120}}><div style={{fontSize:26,fontWeight:800,color:"var(--sage-600)",fontFamily:"var(--font-display)"}}>{n}</div><div style={{fontSize:12,fontWeight:700,color:"var(--gray-400)"}}>{label}</div></div>)}
+    </div>
+    <div className="tab-row">
+      <button className={`filter-chip ${adminTab==="activity"?"active":""}`} onClick={()=>setAdminTab("activity")}>📈 Activity</button>
+      <button className={`filter-chip ${adminTab==="users"?"active":""}`} onClick={()=>setAdminTab("users")}>👥 User List</button>
+      <button className={`filter-chip ${adminTab==="copy"?"active":""}`} onClick={()=>{setAdminTab("copy");if(!settingsDraft)setSettingsDraft({hero_title:copyText("hero_title"),hero_subtitle:copyText("hero_subtitle"),footer_description:copyText("footer_description"),blog_subtitle:copyText("blog_subtitle")});}}>✏️ Site Copy</button>
+      <button className="btn btn-secondary btn-sm" style={{marginLeft:"auto"}} onClick={loadAdminData} disabled={adminLoading}>{adminLoading?"Refreshing...":"↻ Refresh"}</button>
+    </div>
+    {adminLoading&&adminUsers.length===0?<div className="loading"><div className="loading-spinner"/></div>:<>
+    {adminTab==="activity"&&<div className="card-static" style={{padding:"12px 24px"}}>
+      {adminActivity.length===0?<div className="empty-state"><div className="empty-state-icon">📈</div><div className="empty-state-text">No activity yet</div></div>
+      :adminActivity.map((a,i)=><div key={i} className="activity-row"><div className="activity-icon">{ACTIVITY_ICONS[a.type]||"•"}</div><div style={{minWidth:0}}><strong>{a.who||"Someone"}</strong> <span style={{color:"var(--gray-500)"}}>{a.what}</span></div><span className="activity-when">{timeAgo(a.when)}</span></div>)}
+    </div>}
+    {adminTab==="users"&&<div className="card-static" style={{padding:"12px 0",overflowX:"auto"}}>
+      <table className="admin-table"><thead><tr><th>User</th><th>Joined</th><th>Recipes</th><th>Followers</th><th></th></tr></thead><tbody>
+        {adminUsers.map(u=><tr key={u.id}><td><div style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}} onClick={()=>viewProfile(u.id)}><div className="friend-avatar" style={{width:32,height:32,fontSize:13}}>{u.avatar_url?<img src={u.avatar_url} alt=""/>:(u.name||"?")[0].toUpperCase()}</div><div><div style={{fontWeight:700}}>{u.name||"(no name)"}</div>{u.bio&&<div style={{fontSize:12,color:"var(--gray-400)",maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.bio}</div>}</div></div></td><td style={{whiteSpace:"nowrap"}}>{new Date(u.created_at).toLocaleDateString()}</td><td>{u.recipe_count}</td><td>{u.follower_count}</td><td>{u.is_admin&&<span className="admin-chip">ADMIN</span>}</td></tr>)}
+      </tbody></table>
+    </div>}
+    {adminTab==="copy"&&settingsDraft&&<div className="card-static" style={{padding:28,maxWidth:640}}>
+      <div style={{fontSize:13,color:"var(--gray-500)",marginBottom:16}}>These texts appear around the app. Edit and save -- changes go live for everyone right away.</div>
+      {[["hero_title","Homepage headline"],["hero_subtitle","Homepage subtitle"],["footer_description","Footer description"],["blog_subtitle","Blog page subtitle"]].map(([k,label])=><div key={k} className="form-group"><label className="form-label">{label}</label>{k==="hero_title"?<input className="form-input" value={settingsDraft[k]} onChange={e=>setSettingsDraft({...settingsDraft,[k]:e.target.value})}/>:<textarea className="form-input form-textarea" style={{minHeight:60}} value={settingsDraft[k]} onChange={e=>setSettingsDraft({...settingsDraft,[k]:e.target.value})}/>}</div>)}
+      <button className="btn btn-primary" onClick={saveSiteSettings} disabled={settingsSaving}>{settingsSaving?"Saving...":"Save Changes"}</button>
+    </div>}
+    </>}
+  </>:<div className="empty-state"><div className="empty-state-icon">🔒</div><div className="empty-state-text">Admins only</div></div>)}
 
   {/* PROFILE */}
   {page==="profile"&&user&&<>{!profile?<div className="loading"><div className="loading-spinner"/></div>:<>
@@ -534,7 +644,7 @@ export default function Stewdium(){
 
   {/* FOOTER */}
   <footer className="footer"><div className="footer-inner">
-    <div className="footer-brand"><div className="footer-brand-name"><img src="/logo.png" alt="" style={{height:28,width:"auto"}}/><span className="nav-logo-text"><span style={{color:"var(--pink-400)"}}>stew</span>dium</span></div><div className="footer-brand-desc">Your home for discovering, sharing, and organizing recipes.</div></div>
+    <div className="footer-brand"><div className="footer-brand-name"><img src="/logo.png" alt="" style={{height:28,width:"auto"}}/><span className="nav-logo-text"><span style={{color:"var(--pink-400)"}}>stew</span>dium</span></div><div className="footer-brand-desc">{copyText("footer_description")}</div></div>
     <div className="footer-col"><h4>Explore</h4><button className="footer-link" onClick={()=>setPage("home")}>Browse Recipes</button><button className="footer-link" onClick={()=>{if(!user)setAuthModal("login");else setPage("planner");}}>Meal Planner</button><button className="footer-link" onClick={()=>{if(!user)setAuthModal("login");else setPage("friends");}}>Find Friends</button><button className="footer-link" onClick={()=>{setViewingBlog(null);setEditingBlog(null);setPage("blog");}}>Blog</button></div>
     <div className="footer-col"><h4>Account</h4>{user?<><button className="footer-link" onClick={()=>setPage("board")}>My Board</button><button className="footer-link" onClick={()=>setPage("profile")}>Profile</button></>:<><button className="footer-link" onClick={()=>setAuthModal("login")}>Sign In</button><button className="footer-link" onClick={()=>setAuthModal("signup")}>Create Account</button></>}</div>
     <div className="footer-nl"><h4>Get the Newsletter</h4><div className="checkbox-label">Weekly recipes, cooking tips, and community highlights.</div>{footerNlOk?<div className="nl-success"><div className="nl-success-icon">🎉</div><div className="nl-success-text">You're subscribed!</div></div>:<div className="footer-nl-row"><input className="footer-nl-input" type="email" placeholder="your@email.com" value={nlEmail} onChange={e=>setNlEmail(e.target.value)}/><button className="btn btn-pink btn-sm" onClick={handleFooterNl}>Subscribe</button></div>}</div>
