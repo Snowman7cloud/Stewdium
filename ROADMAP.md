@@ -8,6 +8,19 @@ something new, add it here so it never gets lost.
 
 ---
 
+## Built, awaiting deploy
+
+- **Edit mode (Ellie's page designer)** -- built 8/16, tested locally, waiting
+  on John's OK to deploy. A pencil "Edit" toggle appears in the top nav for
+  Ellie only. Flip it on and every piece of site text (homepage headline and
+  subtitle, page titles, blog title/subtitle, all footer text including the
+  copyright line) gets a dashed outline; click it, type, done. On the home
+  page, each section (welcome header / search bar / filter row / recipe grid)
+  gets up/down arrows to reorder the page. Save publishes everything for all
+  visitors at once (stored in site_settings; no database migration needed);
+  Discard throws the drafts away. Leaving edit mode with unsaved changes asks
+  first. Non-admins never see any of it.
+
 ## Shipped
 
 ### August 2026 release (Ellie's feature list)
