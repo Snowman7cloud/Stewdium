@@ -1,4 +1,9 @@
 -- ============================================
+-- STEWDIUM V6 MIGRATION -- DEPRECATED, DO NOT RUN
+-- This was never applied to the live database. v7 supersedes it
+-- (same features, but private notes moved to their own RLS-protected
+-- table instead of a publicly readable column). Run v7 instead.
+-- ============================================
 -- STEWDIUM V6 MIGRATION
 -- Adds: notes/private_notes columns on recipes
 --       blog_post_comments table
